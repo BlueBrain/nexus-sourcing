@@ -6,14 +6,14 @@ pipeline {
         stage("StaticAnalysis") {
           steps {
             node("slave-sbt") {
-              echo 'Static Analysis'
+              sh 'sbt scalafmtSbtCheck scapegoat'
             }
           }
         }
-        stage("TestsWithCoverage") {
+        stage("Tests/Coverage") {
           steps {
             node("slave-sbt") {
-              echo 'Tests with Coverage'
+              sh 'sbt clean coverage coverageReport coverageAggregate'
             }
           }
         }
@@ -21,4 +21,3 @@ pipeline {
     }
   }
 }
-

@@ -13,7 +13,7 @@ pipeline {
                         node("slave-sbt") {
                             sh 'export'
                             sh 'ls -las'
-                            git url: 'https://github.com/${env.ghprbGhRepository}', branch: '${env.sha1}'
+                            git url: "https://github.com/${env.ghprbGhRepository}", branch: "${env.sha1}"
                             sh 'sbt scalafmtSbtCheck scapegoat'
                         }
                     }
@@ -23,7 +23,7 @@ pipeline {
                         node("slave-sbt") {
                             sh 'export'
                             sh 'ls -las'
-                            git url: 'https://github.com/${env.ghprbGhRepository}', branch: '${env.sha1}'
+                            git url: "https://github.com/${env.ghprbGhRepository}", branch: "${env.sha1}"
                             sh 'sbt clean coverage coverageReport coverageAggregate'
                         }
                     }

@@ -6,6 +6,8 @@ pipeline {
         stage("StaticAnalysis") {
           steps {
             node("slave-sbt") {
+              sh 'export'
+              sh 'ls -las'
               sh 'sbt scalafmtSbtCheck scapegoat'
             }
           }
@@ -13,6 +15,8 @@ pipeline {
         stage("Tests/Coverage") {
           steps {
             node("slave-sbt") {
+              sh 'export'
+              sh 'ls -las'
               sh 'sbt clean coverage coverageReport coverageAggregate'
             }
           }

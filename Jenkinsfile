@@ -7,7 +7,7 @@ pipeline {
                 stage("StaticAnalysis") {
                     steps {
                         node("slave-sbt") {
-                            export
+                            sh 'export'
                             checkout scm
                             sh 'sbt clean scalafmtSbtCheck scapegoat'
                         }

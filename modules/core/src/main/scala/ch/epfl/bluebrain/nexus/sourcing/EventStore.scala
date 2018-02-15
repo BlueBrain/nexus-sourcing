@@ -17,10 +17,9 @@ trait EventStore[F[_], Id] {
     * @param id the identifier of the unique event log
     * @param E  an implicitly available stateful event log
     * @tparam Ev the event type of the event log
-    * @tparam St the state type of the event log
     * @return the state of the selected event log instance
     */
-  def currentState[Ev, St](id: Id)(implicit E: StatefulEventLog.Aux[F, Id, Ev, St]): F[St] =
+  def currentState[Ev](id: Id)(implicit E: StatefulEventLog.Aux[F, Id, Ev, _]): F[E.State] =
     E.currentState(id)
 
   /**
@@ -67,12 +66,13 @@ trait EventStore[F[_], Id] {
     * @param E   an implicitly available aggregate
     * @tparam Cmd the command type of the aggregate
     * @tparam Ev  the event type of the aggregate
-    * @tparam St  the state type of the aggregate
-    * @tparam Rej the rejection type of the aggregate
     * @return the outcome of the command evaluation
     */
-  def eval[Cmd, Ev, St, Rej](id: Id, cmd: Cmd)(implicit E: Aggregate.Aux[F, Id, Ev, St, Cmd, Rej]): F[Either[Rej, St]] =
-    E.eval(id, cmd)
+  def eval[Cmd, Ev](id: Id, cmd: Cmd)(implicit E: Aggregate[F] {
+    type Identifier = Id
+    type Event      = Ev
+    type Command >: Cmd
+  }): F[Either[E.Rejection, E.State]] = E.eval(id, cmd)
 
   /**
     * Applies the fold function ''f'' over the sequence of events, oldest to latest, aggregating into a value of type

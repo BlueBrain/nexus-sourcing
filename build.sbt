@@ -72,6 +72,7 @@ inThisBuild(
     releaseEarlyWith              := BintrayPublisher,
     releaseEarlyNoGpg             := true,
     releaseEarlyEnableSyncToMaven := false,
+    releaseEarlyValidatePom       := Def.task(()).value,
     bintrayOrganization           := Some("bbp"),
     bintrayRepository := {
       import ch.epfl.scala.sbt.release.ReleaseEarly.Defaults

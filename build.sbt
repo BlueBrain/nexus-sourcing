@@ -35,6 +35,7 @@ lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
 lazy val core = project
   .in(file("modules/core"))
   .disablePlugins(PublishPlugin)
+  .settings(common, publishSettings)
   .settings(
     name                := "sourcing-core",
     moduleName          := "sourcing-core",
@@ -44,7 +45,7 @@ lazy val core = project
 lazy val root = project
   .in(file("."))
   .disablePlugins(PublishPlugin)
-  .settings(noPublish)
+  .settings(common, noPublish)
   .settings(
     name       := "sourcing",
     moduleName := "sourcing"
@@ -55,7 +56,32 @@ lazy val root = project
  ******************** Grouped Settings ********************
  **********************************************************/
 
-lazy val noPublish = Seq(publishLocal := {}, publish := {})
+lazy val common = Seq(
+  bintrayOrganization := Some("bbp"),
+  bintrayRepository := {
+    import ch.epfl.scala.sbt.release.ReleaseEarly.Defaults
+    if (Defaults.isSnapshot.value) "nexus-snapshots"
+    else "nexus-releases"
+  },
+)
+
+lazy val noPublish = Seq(
+  publishLocal    := {},
+  publish         := {},
+  publishArtifact := false,
+)
+
+lazy val publishSettings = Seq(
+  sources in (Compile, doc)                := Seq.empty,
+  publishArtifact in packageDoc            := false,
+  publishArtifact in (Compile, packageSrc) := false,
+  publishArtifact in (Compile, packageDoc) := false,
+  publishArtifact in (Test, packageBin)    := false,
+  publishArtifact in (Test, packageDoc)    := false,
+  publishArtifact in (Test, packageSrc)    := false,
+  publishMavenStyle                        := true,
+  pomIncludeRepository                     := Function.const(false),
+)
 
 inThisBuild(
   List(
@@ -63,24 +89,8 @@ inThisBuild(
     licenses   := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
     scmInfo    := Some(ScmInfo(url("https://github.com/BlueBrain/nexus-sourcing"), "scm:git:git@github.com:BlueBrain/nexus-sourcing.git")),
     developers := List(Developer("bogdanromanx", "Bogdan Roman", "noreply@epfl.ch", url("https://bluebrain.epfl.ch/"))),
-    // Generic publishing settings
-    sources in (Compile, doc)                := Seq.empty,
-    publishArtifact in packageDoc            := false,
-    publishArtifact in (Compile, packageSrc) := false,
-    publishArtifact in (Compile, packageDoc) := false,
-    publishArtifact in (Test, packageBin)    := false,
-    publishArtifact in (Test, packageDoc)    := false,
-    publishArtifact in (Test, packageSrc)    := false,
-    publishMavenStyle                        := true,
-    pomIncludeRepository                     := Function.const(false),
     // These are the sbt-release-early settings to configure
     releaseEarlyWith              := BintrayPublisher,
     releaseEarlyNoGpg             := true,
     releaseEarlyEnableSyncToMaven := false,
-    bintrayOrganization           := Some("bbp"),
-    bintrayRepository := {
-      import ch.epfl.scala.sbt.release.ReleaseEarly.Defaults
-      if (Defaults.isSnapshot.value) "nexus-snapshots"
-      else "nexus-releases"
-    }
   ))

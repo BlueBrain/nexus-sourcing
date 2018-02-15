@@ -4,7 +4,7 @@ package ch.epfl.bluebrain.nexus.sourcing
   * Typeclass definition that models an interaction with an event log.  The definition does not impose the use of a
   * specific identifier, event type or effect handling.
   *
-  * @tparam F the monadic effect type
+  * @tparam F the effect type
   */
 trait EventLog[F[_]] extends Serializable {
 

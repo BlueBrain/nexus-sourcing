@@ -4,7 +4,7 @@ package ch.epfl.bluebrain.nexus.sourcing
   * A [[StatefulEventLog]] that can evaluate ''Command''s to emit new events and transform its state.  Roughly
   * corresponds to the aggregate root in DDD terminology.
   *
-  * @tparam F the monadic effect type
+  * @tparam F the effect type
   */
 trait Aggregate[F[_]] extends StatefulEventLog[F] {
 

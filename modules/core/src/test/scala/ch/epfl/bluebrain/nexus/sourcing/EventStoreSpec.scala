@@ -4,12 +4,12 @@ import cats.Id
 import ch.epfl.bluebrain.nexus.sourcing.EventStoreSpec.Cmd.{FirstCmd, SecondCmd}
 import ch.epfl.bluebrain.nexus.sourcing.EventStoreSpec.Evt.{FirstEvent, SecondEvent}
 import ch.epfl.bluebrain.nexus.sourcing.EventStoreSpec.St.{First, Second}
+import ch.epfl.bluebrain.nexus.sourcing.EventStoreSpec._
 import org.scalatest.{Matchers, WordSpecLike}
 
 class EventStoreSpec extends WordSpecLike with Matchers {
 
   "An EventStore" should {
-    import EventStoreSpec._
     val es = EventStore[Id, String]
 
     "append via the implicit EventLog" in {

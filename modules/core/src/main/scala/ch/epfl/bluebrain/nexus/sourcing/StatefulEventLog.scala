@@ -5,7 +5,7 @@ package ch.epfl.bluebrain.nexus.sourcing
   * automatically updated to reflect the new events.
   *
   * @see [[EventLog]]
-  * @tparam F the monadic effect type
+  * @tparam F the effect type
   */
 trait StatefulEventLog[F[_]] extends EventLog[F] {
 

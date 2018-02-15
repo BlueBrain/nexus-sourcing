@@ -1,6 +1,4 @@
 pipeline {
-    agent none
-
     stages {
         stage("Dump Env") {
             steps {

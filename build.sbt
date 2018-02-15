@@ -34,6 +34,7 @@ lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
 
 lazy val core = project
   .in(file("modules/core"))
+  .disablePlugins(PublishPlugin)
   .settings(
     name                := "sourcing-core",
     moduleName          := "sourcing-core",
@@ -42,6 +43,7 @@ lazy val core = project
 
 lazy val root = project
   .in(file("."))
+  .disablePlugins(PublishPlugin)
   .settings(noPublish)
   .settings(
     name       := "sourcing",
@@ -69,6 +71,8 @@ inThisBuild(
     publishArtifact in (Test, packageBin)    := false,
     publishArtifact in (Test, packageDoc)    := false,
     publishArtifact in (Test, packageSrc)    := false,
+    publishMavenStyle := true,
+    pomIncludeRepository := Function.const(false),
     // These are the sbt-release-early settings to configure
     releaseEarlyWith              := BintrayPublisher,
     releaseEarlyNoGpg             := true,

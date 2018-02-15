@@ -3,6 +3,9 @@ pipeline {
 
     stages {
         stage("Review") {
+            when {
+                expression { env.CHANGE_ID != null }
+            }
             parallel {
                 stage("StaticAnalysis") {
                     steps {
@@ -21,6 +24,18 @@ pipeline {
                             sh 'sbt clean coverage test coverageReport coverageAggregate'
                         }
                     }
+                }
+            }
+        }
+        stage("Release") {
+            when {
+                expression { env.CHANGE_ID == null }
+            }
+            steps {
+                node("slave-sbt") {
+                    sh 'export'
+                    checkout scm
+                    sh 'sbt releaseEarly'
                 }
             }
         }

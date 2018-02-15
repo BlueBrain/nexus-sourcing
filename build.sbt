@@ -71,8 +71,8 @@ inThisBuild(
     publishArtifact in (Test, packageBin)    := false,
     publishArtifact in (Test, packageDoc)    := false,
     publishArtifact in (Test, packageSrc)    := false,
-    publishMavenStyle := true,
-    pomIncludeRepository := Function.const(false),
+    publishMavenStyle                        := true,
+    pomIncludeRepository                     := Function.const(false),
     // These are the sbt-release-early settings to configure
     releaseEarlyWith              := BintrayPublisher,
     releaseEarlyNoGpg             := true,

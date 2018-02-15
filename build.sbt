@@ -60,7 +60,6 @@ inThisBuild(
     licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt")),
     homepage := Some(url("https://github.com/BlueBrain/nexus-sourcing")),
     scmInfo  := Some(ScmInfo(url("https://github.com/BlueBrain/nexus-sourcing"), "scm:git:git@github.com:BlueBrain/nexus-sourcing.git")),
-
     // Generic publishing settings
     sources in (Compile, doc)                := Seq.empty,
     publishArtifact in packageDoc            := false,
@@ -69,7 +68,6 @@ inThisBuild(
     publishArtifact in (Test, packageBin)    := false,
     publishArtifact in (Test, packageDoc)    := false,
     publishArtifact in (Test, packageSrc)    := false,
-
     // These are the sbt-release-early settings to configure
     releaseEarlyWith              := BintrayPublisher,
     releaseEarlyNoGpg             := true,

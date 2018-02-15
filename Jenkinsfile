@@ -2,12 +2,16 @@ pipeline {
     agent none
 
     stages {
+        stage("Dump Env") {
+            steps {
+                sh 'export'
+            }
+        }
         stage("Review") {
             parallel {
                 stage("StaticAnalysis") {
                     steps {
                         node("slave-sbt") {
-                            sh 'export'
                             checkout scm
                             sh 'sbt clean scalafmtSbtCheck scapegoat'
                         }

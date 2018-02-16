@@ -10,7 +10,6 @@ pipeline {
                 stage("StaticAnalysis") {
                     steps {
                         node("slave-sbt") {
-                            sh 'export'
                             checkout scm
                             sh 'sbt clean scalafmtSbtCheck scapegoat'
                         }
@@ -19,7 +18,6 @@ pipeline {
                 stage("Tests/Coverage") {
                     steps {
                         node("slave-sbt") {
-                            sh 'export'
                             checkout scm
                             sh 'sbt clean coverage test coverageReport coverageAggregate'
                         }
@@ -33,7 +31,6 @@ pipeline {
             }
             steps {
                 node("slave-sbt") {
-                    sh 'export'
                     checkout scm
                     sh 'sbt releaseEarly'
                 }

@@ -40,6 +40,15 @@ lazy val core = project
     libraryDependencies ++= Seq(catsCore, scalaTest % Test)
   )
 
+lazy val mem = project
+  .in(file("modules/mem"))
+  .dependsOn(core % "compile->compile;test->test")
+  .settings(
+    name                := "sourcing-mem",
+    moduleName          := "sourcing-mem",
+    libraryDependencies ++= Seq(catsCore, scalaTest % Test)
+  )
+
 lazy val root = project
   .in(file("."))
   .settings(noPublish)
@@ -47,7 +56,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(core)
+  .aggregate(core, mem)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

@@ -25,12 +25,21 @@ scalafmt: {
  */
 
 // Dependency versions
-val catsVersion      = "1.0.1"
-val scalaTestVersion = "3.0.4"
+val catsVersion                 = "1.0.1"
+val akkaVersion                 = "2.5.9"
+val akkaPersistenceInMemVersion = "2.5.1.1"
+val shapelessVersion            = "2.3.3"
+val scalaTestVersion            = "3.0.5"
 
 // Dependency modules
-lazy val catsCore  = "org.typelevel" %% "cats-core" % catsVersion
-lazy val scalaTest = "org.scalatest" %% "scalatest" % scalaTestVersion
+lazy val catsCore             = "org.typelevel"       %% "cats-core"                 % catsVersion
+lazy val shapeless            = "com.chuusai"         %% "shapeless"                 % shapelessVersion
+lazy val akkaPersistence      = "com.typesafe.akka"   %% "akka-persistence"          % akkaVersion
+lazy val akkaPersistenceQuery = "com.typesafe.akka"   %% "akka-persistence-query"    % akkaVersion
+lazy val akkaClusterSharding  = "com.typesafe.akka"   %% "akka-cluster-sharding"     % akkaVersion
+lazy val akkaPersistenceInMem = "com.github.dnvriend" %% "akka-persistence-inmemory" % akkaPersistenceInMemVersion
+lazy val akkaTestKit          = "com.typesafe.akka"   %% "akka-testkit"              % akkaVersion
+lazy val scalaTest            = "org.scalatest"       %% "scalatest"                 % scalaTestVersion
 
 lazy val core = project
   .in(file("modules/core"))
@@ -40,6 +49,32 @@ lazy val core = project
     libraryDependencies ++= Seq(catsCore, scalaTest % Test)
   )
 
+lazy val akka = project
+  .in(file("modules/akka"))
+  .dependsOn(core % "compile->compile;test->test")
+  .settings(
+    name       := "sourcing-akka",
+    moduleName := "sourcing-akka",
+    libraryDependencies ++= Seq(
+      shapeless,
+      akkaPersistence,
+      akkaPersistenceQuery,
+      akkaClusterSharding,
+      akkaTestKit          % Test,
+      akkaPersistenceInMem % Test,
+      scalaTest            % Test
+    )
+  )
+
+lazy val mem = project
+  .in(file("modules/mem"))
+  .dependsOn(core % "compile->compile;test->test")
+  .settings(
+    name                := "sourcing-mem",
+    moduleName          := "sourcing-mem",
+    libraryDependencies ++= Seq(scalaTest % Test)
+  )
+
 lazy val root = project
   .in(file("."))
   .settings(noPublish)
@@ -47,7 +82,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(core)
+  .aggregate(core, akka, mem)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

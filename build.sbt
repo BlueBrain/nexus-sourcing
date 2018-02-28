@@ -49,6 +49,23 @@ lazy val core = project
     libraryDependencies ++= Seq(catsCore, scalaTest % Test)
   )
 
+lazy val akkaCache = project
+  .in(file("modules/akka-cache"))
+  .dependsOn(core % "compile->compile;test->test")
+  .settings(
+    name       := "sourcing-akka-cache",
+    moduleName := "sourcing-akka-cache",
+    libraryDependencies ++= Seq(
+      shapeless,
+      akkaPersistence,
+      akkaPersistenceQuery,
+      akkaClusterSharding,
+      akkaTestKit          % Test,
+      akkaPersistenceInMem % Test,
+      scalaTest            % Test
+    )
+  )
+
 lazy val akka = project
   .in(file("modules/akka"))
   .dependsOn(core % "compile->compile;test->test")
@@ -82,7 +99,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(core, akka, mem)
+  .aggregate(core, akkaCache, akka, mem)
 
 /* ********************************************************
  ******************** Grouped Settings ********************
@@ -110,3 +127,5 @@ inThisBuild(
     releaseEarlyNoGpg             := true,
     releaseEarlyEnableSyncToMaven := false,
   ))
+
+addCommandAlias("review", ";clean;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")

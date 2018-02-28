@@ -15,7 +15,7 @@ import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 
 class ShardingAggregateSpec
-  extends TestKit(ActorSystem("ShardingAggregateSpec"))
+    extends TestKit(ActorSystem("ShardingAggregateSpec"))
     with WordSpecLike
     with Matchers
     with ScalaFutures
@@ -33,13 +33,13 @@ class ShardingAggregateSpec
     super.afterAll()
   }
 
-  private implicit val mt: ActorMaterializer = ActorMaterializer()
+  private implicit val mt: ActorMaterializer        = ActorMaterializer()
   private implicit val ec: ExecutionContextExecutor = system.dispatcher
 
   private val aggregate =
     ShardingAggregate("permission", SourcingAkkaSettings(journalPluginId = "inmemory-read-journal"))(initial,
-      next,
-      eval)
+                                                                                                     next,
+                                                                                                     eval)
 
   "A ShardingAggregate" should {
     "return a 0 sequence number for an empty event log" in {

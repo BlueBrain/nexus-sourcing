@@ -9,16 +9,16 @@ import shapeless.{Typeable, the}
 import scala.concurrent.duration._
 
 /**
-  * Actor that stores in memory a ''Value''.
+  * Actor that stores in memory a ''V''.
   *
   * @param passivationTimeout the inactivity interval after which the actor requests to be stopped
-  * @tparam Value the generic type of the value stored on this actor
+  * @tparam V the generic type of the value stored on this actor
   */
-class CacheActor[Value: Typeable](passivationTimeout: FiniteDuration) extends Actor with ActorLogging {
+class CacheActor[V: Typeable](passivationTimeout: FiniteDuration) extends Actor with ActorLogging {
 
-  private val Value = the[Typeable[Value]]
+  private val V = the[Typeable[V]]
 
-  private var value: Option[Value] = None
+  private var value: Option[V] = None
 
   override def preStart(): Unit = {
     context.setReceiveTimeout(passivationTimeout)
@@ -37,14 +37,14 @@ class CacheActor[Value: Typeable](passivationTimeout: FiniteDuration) extends Ac
       sender() ! value
 
     case Put(k, v) =>
-      Value.cast(v) match {
+      V.cast(v) match {
         case Some(cache) =>
           value = Some(cache)
           sender() ! Ack(k)
           log.debug("Added to cache key '{}' with value '{}'", k, cache)
         // $COVERAGE-OFF$
         case None =>
-          log.error("Received a value '{}' incompatible with the expected type '{}'", v, Value.describe)
+          log.error("Received a value '{}' incompatible with the expected type '{}'", v, V.describe)
           sender() ! TypeError
         // $COVERAGE-ON$
       }
@@ -94,9 +94,9 @@ object CacheActor {
       *
       * @param key   the key for which the provided ''value'' is going to be added
       * @param value the value to be added
-      * @tparam Value the generic type of the value stored on this actor
+      * @tparam V the generic type of the value stored on this actor
       */
-    final case class Put[Value](key: String, value: Value) extends Protocol
+    final case class Put[V](key: String, value: V) extends Protocol
 
     /**
       * Positive return message

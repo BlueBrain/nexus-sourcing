@@ -51,7 +51,6 @@ lazy val core = project
 
 lazy val akkaCache = project
   .in(file("modules/akka-cache"))
-  .dependsOn(core % "compile->compile;test->test")
   .settings(
     name       := "sourcing-akka-cache",
     moduleName := "sourcing-akka-cache",

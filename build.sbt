@@ -55,10 +55,11 @@ lazy val akkaCache = project
     name       := "sourcing-akka-cache",
     moduleName := "sourcing-akka-cache",
     libraryDependencies ++= Seq(
-      shapeless,
       akkaPersistence,
       akkaPersistenceQuery,
       akkaClusterSharding,
+      catsCore,
+      shapeless,
       akkaTestKit          % Test,
       akkaPersistenceInMem % Test,
       scalaTest            % Test

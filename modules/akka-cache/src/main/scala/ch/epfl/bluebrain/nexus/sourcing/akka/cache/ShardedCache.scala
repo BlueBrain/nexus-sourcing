@@ -11,7 +11,7 @@ import cats.instances.future._
 import ch.epfl.bluebrain.nexus.sourcing.akka.cache.CacheActor.Protocol._
 import ch.epfl.bluebrain.nexus.sourcing.akka.cache.CacheActor._
 import ch.epfl.bluebrain.nexus.sourcing.akka.cache.CacheError._
-import shapeless.Typeable
+import shapeless.{TypeCase, Typeable}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -25,8 +25,12 @@ import scala.util.control.NonFatal
   * @tparam K the generic type of the keys stored on the Cache
   * @tparam V the generic type of the values stored on the Cache
   */
-class ShardedCache[K, V](ref: ActorRef, logger: LoggingAdapter)(implicit ec: ExecutionContext, tm: Timeout, S: Show[K])
+class ShardedCache[K, V: Typeable](ref: ActorRef, logger: LoggingAdapter)(implicit ec: ExecutionContext,
+                                                                          tm: Timeout,
+                                                                          S: Show[K])
     extends Cache[Future, K, V] {
+
+  private val CaseValue = TypeCase[V]
 
   def put(k: K, v: V): Future[Unit] =
     if (k.isEmpty) Future.failed(EmptyKey)
@@ -47,10 +51,10 @@ class ShardedCache[K, V](ref: ActorRef, logger: LoggingAdapter)(implicit ec: Exe
   def get(k: K): Future[Option[V]] =
     if (k.isEmpty) Future.failed(EmptyKey)
     else
-      ref ? Get(k) recoverWith recover(k, "get") flatMap {
-        case (valueOpt: Some[V]) => Future.successful(valueOpt: Option[V])
-        case (None)              => Future.successful(None: Option[V])
-        case other               =>
+      ref ? Get(k) recoverWith recover(k, "get") flatMap [Option[V]] {
+        case Some(CaseValue(v)) => Future.successful(Some(v))
+        case None               => Future.successful(None)
+        case other              =>
           // $COVERAGE-OFF$
           logger.error("Unexpected reply '{}' from the underlying actor while getting the value for the key '{}'",
                        other,
@@ -69,6 +73,23 @@ class ShardedCache[K, V](ref: ActorRef, logger: LoggingAdapter)(implicit ec: Exe
           logger.error("Unexpected reply '{}' from the underlying actor while removing the value of a key '{}'",
                        other,
                        k)
+          Future.failed(UnexpectedReply(other))
+        // $COVERAGE-ON$
+      }
+
+  override def putIfAbsent(k: K, v: => V): Future[V] =
+    if (k.isEmpty) Future.failed(EmptyKey)
+    else
+      ref ? PutIfAbsent(k, () => v) recoverWith recover(k, "putIfAbsent") flatMap {
+        case CaseValue(v) => Future.successful(v)
+        case TypeError    => Future.failed(TypeError)
+        case other        =>
+          // $COVERAGE-OFF$
+          logger.error(
+            "Unexpected reply '{}' from the underlying actor while caching a key '{}' with the value '{}' if a value did not already exists",
+            other,
+            k,
+            v)
           Future.failed(UnexpectedReply(other))
         // $COVERAGE-ON$
       }

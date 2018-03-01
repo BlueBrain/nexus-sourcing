@@ -41,6 +41,17 @@ abstract class Cache[F[_], K: Show, V](implicit F: MonadError[F, Throwable]) {
   def put(key: K, value: V): F[Unit]
 
   /**
+    * If the provided ''key'' is not already associated with a ''value'',
+    * associates the provided ''value'' to the key, otherwise do nothing.
+    * The default implementation makes no guarantees about synchronization or atomicity properties of this method.
+    *
+    * @param key   the key to associate to the provided ''value'' or from where to fetch an existing value
+    * @param value the value to associate to the provided ''key'' when it does not already exists
+    * @return the value linked to the provided ''key'' wrapped in the abstract ''F[_]'' type
+    **/
+  def putIfAbsent(key: K, value: => V): F[V]
+
+  /**
     * Removes the value of the provided ''key''.
     *
     * @param key the key from where to obtain the value to be removed

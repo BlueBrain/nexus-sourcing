@@ -48,12 +48,6 @@ class CacheSpec
     atomic.set(0L)
   }
 
-
-
-
-
-
-
   "A Cache" should {
 
     "add elements" in {

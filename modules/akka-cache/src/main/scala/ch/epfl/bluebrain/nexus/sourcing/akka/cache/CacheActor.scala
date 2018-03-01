@@ -36,26 +36,6 @@ class CacheActor[V: Typeable](passivationTimeout: FiniteDuration) extends Actor 
       }
       sender() ! value
 
-    case PutIfAbsent(k, f) =>
-      value match {
-        case Some(v) =>
-          log.debug("Cached key '{}' found with value  '{}'. Do nothing", k, v)
-          sender() ! v
-        case None =>
-          val fVal = f()
-          V.cast(fVal) match {
-            case Some(cache) =>
-              value = Some(cache)
-              log.debug("Added to cache key '{}' with value '{}'", k, cache)
-              sender() ! cache
-            // $COVERAGE-OFF$
-            case None =>
-              log.error("Received a value '{}' incompatible with the expected type '{}'", fVal, V.describe)
-              sender() ! TypeError
-            // $COVERAGE-ON$
-          }
-      }
-
     case Put(k, v) =>
       V.cast(v) match {
         case Some(cache) =>
@@ -117,16 +97,6 @@ object CacheActor {
       * @tparam V the generic type of the value stored on this actor
       */
     final case class Put[V](key: String, value: V) extends Protocol
-
-    /**
-      * Put if absent message. When received, the actor set its in-memory value to the provided ''value''
-      * ONLY if no previous value exists for the provided ''key''.
-      *
-      * @param key   the key for which the provided ''value'' is going to be added if no value already exists
-      * @param value the value to be added if no value already exists
-      * @tparam V the generic type of the value
-      */
-    final case class PutIfAbsent[V](key: String, value: () => V) extends Protocol
 
     /**
       * Positive return message

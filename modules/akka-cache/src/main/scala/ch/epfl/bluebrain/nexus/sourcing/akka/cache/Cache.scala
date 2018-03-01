@@ -43,6 +43,7 @@ abstract class Cache[F[_], K: Show, V](implicit F: MonadError[F, Throwable]) {
   /**
     * If the provided ''key'' is not already associated with a ''value'',
     * associates the provided ''value'' to the key, otherwise do nothing.
+    * The default implementation makes no guarantees about synchronization or atomicity properties of this method.
     *
     * @param key   the key to associate to the provided ''value'' or from where to fetch an existing value
     * @param value the value to associate to the provided ''key'' when it does not already exists

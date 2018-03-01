@@ -78,21 +78,12 @@ class ShardedCache[K, V: Typeable](ref: ActorRef, logger: LoggingAdapter)(implic
       }
 
   override def putIfAbsent(k: K, v: => V): Future[V] =
-    if (k.isEmpty) Future.failed(EmptyKey)
-    else
-      ref ? PutIfAbsent(k, () => v) recoverWith recover(k, "putIfAbsent") flatMap {
-        case CaseValue(v) => Future.successful(v)
-        case TypeError    => Future.failed(TypeError)
-        case other        =>
-          // $COVERAGE-OFF$
-          logger.error(
-            "Unexpected reply '{}' from the underlying actor while caching a key '{}' with the value '{}' if a value did not already exists",
-            other,
-            k,
-            v)
-          Future.failed(UnexpectedReply(other))
-        // $COVERAGE-ON$
-      }
+    get(k) flatMap {
+      case Some(v) => Future.successful(v)
+      case None =>
+        val value = v
+        put(k, value).map(_ => value)
+    }
 
   private def recover(k: String, operation: String): PartialFunction[Throwable, Future[Any]] = {
     // $COVERAGE-OFF$

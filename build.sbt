@@ -25,8 +25,8 @@ scalafmt: {
  */
 
 // Dependency versions
-val catsVersion                 = "1.0.1"
-val akkaVersion                 = "2.5.9"
+val catsVersion                 = "1.1.0"
+val akkaVersion                 = "2.5.11"
 val akkaPersistenceInMemVersion = "2.5.1.1"
 val shapelessVersion            = "2.3.3"
 val scalaTestVersion            = "3.0.5"
@@ -39,6 +39,7 @@ lazy val akkaPersistenceQuery = "com.typesafe.akka"   %% "akka-persistence-query
 lazy val akkaClusterSharding  = "com.typesafe.akka"   %% "akka-cluster-sharding"     % akkaVersion
 lazy val akkaPersistenceInMem = "com.github.dnvriend" %% "akka-persistence-inmemory" % akkaPersistenceInMemVersion
 lazy val akkaTestKit          = "com.typesafe.akka"   %% "akka-testkit"              % akkaVersion
+lazy val akkaSlf4j            = "com.typesafe.akka"   %% "akka-slf4j"                % akkaVersion
 lazy val scalaTest            = "org.scalatest"       %% "scalatest"                 % scalaTestVersion
 
 lazy val core = project
@@ -62,6 +63,7 @@ lazy val akkaCache = project
       shapeless,
       akkaTestKit          % Test,
       akkaPersistenceInMem % Test,
+      akkaSlf4j            % Test,
       scalaTest            % Test
     )
   )
@@ -79,6 +81,7 @@ lazy val akka = project
       akkaClusterSharding,
       akkaTestKit          % Test,
       akkaPersistenceInMem % Test,
+      akkaSlf4j            % Test,
       scalaTest            % Test
     )
   )

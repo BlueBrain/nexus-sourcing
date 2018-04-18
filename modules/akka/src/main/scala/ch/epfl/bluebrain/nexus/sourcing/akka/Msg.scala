@@ -77,3 +77,21 @@ final case class Eval[Cmd](id: String, cmd: Cmd) extends Msg
   * @tparam St  the type of the event log state
   */
 final case class Evaluated[Rej, St](id: String, value: Either[Rej, St]) extends Msg
+
+/**
+  * Message to check a command against an aggregate.
+  *
+  * @param id  the persistent id
+  * @param cmd the command to check
+  * @tparam Cmd the type of the command to check
+  */
+final case class CheckEval[Cmd](id: String, cmd: Cmd) extends Msg
+
+/**
+  * Message for replying with the outcome of checking a command against an aggregate.
+  *
+  * @param id    the persistent id
+  * @param value an optional rejection (None when is valid)
+  * @tparam Rej the type of rejection
+  */
+final case class Validated[Rej](id: String, value: Option[Rej]) extends Msg

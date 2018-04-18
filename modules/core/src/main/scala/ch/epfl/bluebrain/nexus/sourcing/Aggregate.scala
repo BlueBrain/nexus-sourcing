@@ -27,6 +27,16 @@ trait Aggregate[F[_]] extends StatefulEventLog[F] {
     *         command
     */
   def eval(id: Identifier, cmd: Command): F[Either[Rejection, State]]
+
+  /**
+    * Checks if a eval of the argument command against the aggregate identified by the argument ''id'' would return
+    * a rejection or not.
+    *
+    * @param id  the identifier of the unique aggregate
+    * @param cmd the command to check
+    * @return the outcome of the command check, which can be a rejection or None
+    */
+  def checkEval(id: Identifier, cmd: Command): F[Option[Rejection]]
 }
 
 object Aggregate {

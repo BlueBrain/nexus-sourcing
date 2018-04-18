@@ -193,6 +193,45 @@ final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
       // $COVERAGE-ON$
     }
   }
+
+  override def checkEval(id: String, cmd: Cmd): Future[Option[Rejection]] = {
+    logger.debug("Validating command '{}' on '{}-{}'", cmd, name, id)
+    val action = CheckEval(id, cmd)
+    ref ? action recoverWith {
+      // $COVERAGE-OFF$
+      case _: AskTimeoutException =>
+        logger.error("Timed out while validating command '{}' on '{}-{}'", cmd, name, id)
+        Future.failed(TimeoutError(id, action))
+      case NonFatal(th) =>
+        logger.error(th, "Unexpected exception while validating command '{}' on '{}-{}'", cmd, name, id)
+        Future.failed(UnknownError(id, action, th))
+      // $COVERAGE-ON$
+    } flatMap {
+      case Validated(`id`, Some(rejection)) =>
+        Rejection.cast(rejection) match {
+          case Some(rej) =>
+            logger.debug("Rejected command '{}' due to '{}' on '{}-{}'", cmd, rejection, name, id)
+            Future.successful(Some(rej))
+          // $COVERAGE-OFF$
+          case None =>
+            logger.error("Received an unknown rejection '{}' from '{}-{}'", rejection, name, id)
+            Future.failed(TypeError(id, Rejection.describe, rejection))
+          // $COVERAGE-ON$
+        }
+      case Validated(`id`, None) =>
+        logger.debug("Validated command '{}' on '{}-{}'", cmd, name, id)
+        Future.successful(None)
+      // $COVERAGE-OFF$
+      case unexpected =>
+        logger.error("Received an unexpected reply '{}' while validating command '{}' '{}-{}'",
+                     unexpected,
+                     cmd,
+                     name,
+                     id)
+        Future.failed(UnexpectedReply(id, action, unexpected))
+      // $COVERAGE-ON$
+    }
+  }
 }
 
 object ShardingAggregate {

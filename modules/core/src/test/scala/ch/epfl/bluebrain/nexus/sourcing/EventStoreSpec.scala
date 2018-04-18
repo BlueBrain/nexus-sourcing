@@ -36,6 +36,10 @@ class EventStoreSpec extends WordSpecLike with Matchers {
       es.eval(id, FirstCmd) shouldEqual Right(First)
     }
 
+    "return None when checking the evaluation of a command" in {
+      es.checkEval(id, FirstCmd) shouldEqual None
+    }
+
     "return the fold outcome based on the sequence of events" in {
       es.foldLeft[List[Evt], Evt](id, List.empty[Evt]) {
         case (acc, elem) => elem :: acc
@@ -92,5 +96,7 @@ object EventStoreSpec {
     override def name: String = "name"
 
     override def append(id: String, event: Event): Long = 3L
+
+    override def checkEval(id: String, cmd: Cmd): Option[String] = None
   }
 }

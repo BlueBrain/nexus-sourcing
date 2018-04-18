@@ -89,6 +89,15 @@ class ShardingAggregateSpec
         case Right(_)           => fail("should have rejected deletion on initial state")
       }
     }
+
+    "check out of order commands" in {
+      val id = genId
+      aggregate.checkEval(id, DeletePermissions).futureValue match {
+        case Some(_: Rejection) => ()
+        case None               => fail("should have rejected deletion on initial state")
+      }
+    }
+
     "return the current computed state" in {
       val id = genId
       val returned = for {
@@ -97,6 +106,13 @@ class ShardingAggregateSpec
       } yield second
       returned.futureValue shouldEqual Right(Current(ownRead))
       aggregate.currentState(id).futureValue shouldEqual Current(ownRead)
+    }
+
+    "return no rejection when check on commands evaluation is successful" in {
+      val id = genId
+      aggregate.checkEval(id, AppendPermissions(own)).futureValue shouldEqual None
+      aggregate.checkEval(id, AppendPermissions(read)).futureValue shouldEqual None
+      aggregate.currentState(id).futureValue shouldEqual initial
     }
 
     "query over ids that are not url segment safe" in {

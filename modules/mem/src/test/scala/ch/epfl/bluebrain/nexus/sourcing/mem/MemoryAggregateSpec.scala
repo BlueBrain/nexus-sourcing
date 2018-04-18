@@ -47,6 +47,13 @@ class MemoryAggregateSpec extends WordSpecLike with Matchers with TryValues {
         case Right(_)           => fail("should have rejected deletion on initial state")
       }
     }
+    "check of out of order commands" in {
+      val id = genId
+      aggregate.checkEval(id, DeletePermissions).success.value match {
+        case Some(_: Rejection) => ()
+        case None               => fail("should have rejected deletion on initial state")
+      }
+    }
     "return the current computed state" in {
       val id = genId
       val returned = for {
@@ -55,6 +62,12 @@ class MemoryAggregateSpec extends WordSpecLike with Matchers with TryValues {
       } yield second
       returned.success.value shouldEqual Right(Current(ownRead))
       aggregate.currentState(id).success.value shouldEqual Current(ownRead)
+    }
+    "return no rejection when check on commands evaluation is successful" in {
+      val id = genId
+      aggregate.checkEval(id, AppendPermissions(own)).success.value shouldEqual None
+      aggregate.checkEval(id, AppendPermissions(read)).success.value shouldEqual None
+      aggregate.currentState(id).success.value shouldEqual initial
     }
   }
 

@@ -73,6 +73,9 @@ final class MemoryAggregate[Evt, St, Cmd, Rej](
     value.rejection.map(rej => Left(rej)).getOrElse(Right(value.state))
   }
 
+  override def checkEval(id: String, cmd: Cmd): Option[Rejection] =
+    eval(currentState(id), cmd).left.toOption
+
   private val empty = Value[State, Event, Rejection](initial, Vector.empty)
 
   private def valueOrEmpty(id: Identifier): Value[State, Event, Rejection] =
@@ -130,6 +133,9 @@ object MemoryAggregate {
 
       override def foldLeft[B](id: Identifier, z: B)(f: (B, Event) => B): F[B] =
         agg.foldLeft(id, z)(f).pure
+
+      override def checkEval(id: Ident, cmd: Cmd): F[Option[Rejection]] =
+        agg.checkEval(id, cmd).pure
     }
 
   final implicit class AggregateOps[Ident, Evt, St, Cmd, Rej](val agg: Aggregate.Aux[Id, Ident, Evt, St, Cmd, Rej]) {

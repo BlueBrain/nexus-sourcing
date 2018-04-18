@@ -78,6 +78,16 @@ class AggregateActor[Event: Typeable, State, Command: Typeable, Rejection](
           sender() ! TypeError(id, Command.describe, value)
         // $COVERAGE-ON$
       }
+    case CheckEval(id, value) =>
+      Command.cast(value) match {
+        case Some(cmd) =>
+          sender() ! Validated(id, eval(state, cmd).left.toOption)
+        // $COVERAGE-OFF$
+        case None =>
+          log.error("Received a command '{}' incompatible with the expected type '{}'", value, Command.describe)
+          sender() ! TypeError(id, Command.describe, value)
+        // $COVERAGE-ON$
+      }
     case GetLastSeqNr(id) =>
       sender() ! LastSeqNr(id, lastSequenceNr)
     case GetCurrentState(id) =>

@@ -75,6 +75,22 @@ trait EventStore[F[_], Id] {
   }): F[Either[E.Rejection, E.State]] = E.eval(id, cmd)
 
   /**
+    * Checks if a eval of the argument command against the aggregate identified by the argument ''id'' would return
+    * a rejection or not.
+    *
+    * @param id  the identifier of the unique aggregate
+    * @param cmd the command to check
+    * @param E   an implicitly available aggregate
+    * @tparam Cmd the command type of the aggregate
+    * @tparam Ev  the event type of the aggregate
+    * @return the outcome of the command check
+    */
+  def checkEval[Cmd, Ev](id: Id, cmd: Cmd)(implicit E: Aggregate[F] {
+    type Identifier = Id
+    type Command >: Cmd
+  }): F[Option[E.Rejection]] = E.checkEval(id, cmd)
+
+  /**
     * Applies the fold function ''f'' over the sequence of events, oldest to latest, aggregating into a value of type
     * ''B''.  If there is no record of an event log instance with the specified identifier the function will return the
     * initial value ''z: B''.  Effects are represented under the type ''F[_]''.

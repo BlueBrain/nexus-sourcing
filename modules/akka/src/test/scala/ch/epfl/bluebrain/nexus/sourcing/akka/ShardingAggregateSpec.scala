@@ -8,6 +8,7 @@ import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate.Command._
 import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate.Event._
 import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate.State._
 import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate._
+import ch.epfl.bluebrain.nexus.sourcing.PersistentId
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
@@ -36,6 +37,8 @@ class ShardingAggregateSpec
   private implicit val mt: ActorMaterializer        = ActorMaterializer()
   private implicit val ec: ExecutionContextExecutor = system.dispatcher
 
+  private def genPersistentId = PersistentId(genId, genId)
+
   private val aggregate =
     ShardingAggregate("permission", SourcingAkkaSettings(journalPluginId = "inmemory-read-journal"))(initial,
                                                                                                      next,
@@ -43,21 +46,23 @@ class ShardingAggregateSpec
 
   "A ShardingAggregate" should {
     "return a 0 sequence number for an empty event log" in {
-      aggregate.lastSequenceNr("unknown").futureValue shouldEqual 0L
+      aggregate.lastSequenceNr(PersistentId("unknown", "keyspace")).futureValue shouldEqual 0L
     }
+
     "return a initial state for an empty event log" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.currentState(id).futureValue shouldEqual initial
     }
+
     "append an event to the log" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.currentState(id).futureValue shouldEqual initial
       aggregate.append(id, PermissionsWritten(own)).futureValue shouldEqual 1L
       aggregate.currentState(id).futureValue shouldEqual Current(own)
-
     }
+
     "retrieve the appended events from the log" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.append(id, PermissionsAppended(own)).futureValue
       aggregate.append(id, PermissionsAppended(read)).futureValue
       aggregate
@@ -67,8 +72,27 @@ class ShardingAggregateSpec
         .futureValue shouldEqual List(PermissionsAppended(read), PermissionsAppended(own))
     }
 
+    "retrieve keyspaced events from the log separately" in {
+      val id  = genId
+      val id1 = PersistentId(id, "ks1")
+      val id2 = PersistentId(id, "ks2")
+      aggregate.append(id1, PermissionsAppended(own)).futureValue
+      aggregate.append(id2, PermissionsAppended(ownRead)).futureValue
+      aggregate.append(id1, PermissionsAppended(read)).futureValue
+      aggregate
+        .foldLeft(id1, List.empty[Event]) {
+          case (acc, ev) => ev :: acc
+        }
+        .futureValue shouldEqual List(PermissionsAppended(read), PermissionsAppended(own))
+      aggregate
+        .foldLeft(id2, List.empty[Event]) {
+          case (acc, ev) => ev :: acc
+        }
+        .futureValue shouldEqual List(PermissionsAppended(ownRead))
+    }
+
     "retrieve the appended events only from the log for the same type" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.append(id, PermissionsAppended(own)).futureValue
       aggregate.append(id, PermissionsAppended(read)).futureValue
       val anotherAggregate = ShardingAggregate(
@@ -83,7 +107,7 @@ class ShardingAggregateSpec
     }
 
     "reject out of order commands" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.eval(id, DeletePermissions).futureValue match {
         case Left(_: Rejection) => ()
         case Right(_)           => fail("should have rejected deletion on initial state")
@@ -91,7 +115,7 @@ class ShardingAggregateSpec
     }
 
     "check out of order commands" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.checkEval(id, DeletePermissions).futureValue match {
         case Some(_: Rejection) => ()
         case None               => fail("should have rejected deletion on initial state")
@@ -99,7 +123,7 @@ class ShardingAggregateSpec
     }
 
     "return the current computed state" in {
-      val id = genId
+      val id = genPersistentId
       val returned = for {
         _      <- aggregate.eval(id, AppendPermissions(own))
         second <- aggregate.eval(id, AppendPermissions(read))
@@ -109,14 +133,14 @@ class ShardingAggregateSpec
     }
 
     "return no rejection when check on commands evaluation is successful" in {
-      val id = genId
+      val id = genPersistentId
       aggregate.checkEval(id, AppendPermissions(own)).futureValue shouldEqual None
       aggregate.checkEval(id, AppendPermissions(read)).futureValue shouldEqual None
       aggregate.currentState(id).futureValue shouldEqual initial
     }
 
     "query over ids that are not url segment safe" in {
-      val id       = s"/$genId/sub"
+      val id       = PersistentId(s"/$genId/sub", "keyspace")
       val appended = PermissionsAppended(own)
       aggregate.append(id, appended).futureValue
       val result = aggregate.foldLeft(id, Option.empty[Event]) { case (_, ev) => Some(ev) }

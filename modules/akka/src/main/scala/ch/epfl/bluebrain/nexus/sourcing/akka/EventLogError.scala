@@ -1,5 +1,7 @@
 package ch.epfl.bluebrain.nexus.sourcing.akka
 
+import ch.epfl.bluebrain.nexus.sourcing.PersistentId
+
 /**
   * Top level error type definition for the akka persistence backed sourcing implementation.
   *
@@ -19,7 +21,7 @@ sealed abstract class EventLogError(message: String) extends Exception {
   * @param received the received message
   */
 @SuppressWarnings(Array("IncorrectlyNamedExceptions"))
-final case class TypeError(id: String, expected: String, received: Any)
+final case class TypeError(id: PersistentId, expected: String, received: Any)
     extends EventLogError(s"Received an unexpected '$received', expected '$expected' type for action on '$id'")
 
 /**
@@ -30,7 +32,7 @@ final case class TypeError(id: String, expected: String, received: Any)
   * @tparam A the type of the action performed
   */
 @SuppressWarnings(Array("IncorrectlyNamedExceptions"))
-final case class TimeoutError[A](id: String, action: A)
+final case class TimeoutError[A](id: PersistentId, action: A)
     extends EventLogError(s"Timed out while expecting reply for action on '$id'")
 
 /**
@@ -44,7 +46,7 @@ final case class TimeoutError[A](id: String, action: A)
   * @tparam B the type of the reply received
   */
 @SuppressWarnings(Array("IncorrectlyNamedExceptions"))
-final case class UnexpectedReply[A, B](id: String, action: A, reply: B)
+final case class UnexpectedReply[A, B](id: PersistentId, action: A, reply: B)
     extends EventLogError(s"Received an unexpected reply for action on '$id")
 
 /**
@@ -57,5 +59,5 @@ final case class UnexpectedReply[A, B](id: String, action: A, reply: B)
   * @tparam A the type of the action performed
   */
 @SuppressWarnings(Array("IncorrectlyNamedExceptions"))
-final case class UnknownError[A](id: String, action: A, th: Throwable)
+final case class UnknownError[A](id: PersistentId, action: A, th: Throwable)
     extends EventLogError(s"Unknown error occurred while executing action on '$id'")

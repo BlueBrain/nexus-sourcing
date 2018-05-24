@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import cats.{Applicative, Id}
 import cats.syntax.applicative._
-import ch.epfl.bluebrain.nexus.sourcing.Aggregate
+import ch.epfl.bluebrain.nexus.sourcing.{Aggregate, PersistentId}
 import ch.epfl.bluebrain.nexus.sourcing.mem.MemoryAggregate.Value
 
 /**
@@ -26,13 +26,13 @@ final class MemoryAggregate[Evt, St, Cmd, Rej](
     eval: (St, Cmd) => Either[Rej, Evt]
 ) extends Aggregate[Id] {
 
-  override type Identifier = String
+  override type Identifier = PersistentId
   override type Event      = Evt
   override type State      = St
   override type Command    = Cmd
   override type Rejection  = Rej
 
-  private val store = new ConcurrentHashMap[String, Value[State, Event, Rejection]]()
+  private val store = new ConcurrentHashMap[Identifier, Value[State, Event, Rejection]]()
 
   override def append(id: Identifier, event: Event): Long = {
     store
@@ -73,7 +73,7 @@ final class MemoryAggregate[Evt, St, Cmd, Rej](
     value.rejection.map(rej => Left(rej)).getOrElse(Right(value.state))
   }
 
-  override def checkEval(id: String, cmd: Cmd): Option[Rejection] =
+  override def checkEval(id: Identifier, cmd: Cmd): Option[Rejection] =
     eval(currentState(id), cmd).left.toOption
 
   private val empty = Value[State, Event, Rejection](initial, Vector.empty)
@@ -101,7 +101,7 @@ object MemoryAggregate {
       initial: State,
       next: (State, Event) => State,
       eval: (State, Command) => Either[Rejection, Event]
-  ): Aggregate.Aux[Id, String, Event, State, Command, Rejection] =
+  ): Aggregate.Aux[Id, PersistentId, Event, State, Command, Rejection] =
     new MemoryAggregate(name, initial, next, eval)
 
   private[mem] final case class Value[State, Event, Rejection](state: State,

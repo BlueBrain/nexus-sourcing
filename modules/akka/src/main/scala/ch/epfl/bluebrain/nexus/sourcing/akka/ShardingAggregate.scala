@@ -9,7 +9,7 @@ import akka.persistence.query.PersistenceQuery
 import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.stream.Materializer
 import akka.util.Timeout
-import ch.epfl.bluebrain.nexus.sourcing.{Aggregate, PersistentId}
+import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import com.typesafe.config.ConfigFactory
 import shapeless.{Typeable, the}
 
@@ -27,7 +27,7 @@ final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
 )(implicit as: ActorSystem, ec: ExecutionContext, mt: Materializer, tm: Timeout)
     extends Aggregate[Future] {
 
-  override type Identifier = PersistentId
+  override type Identifier = PersistenceId
   override type Event      = Evt
   override type State      = St
   override type Command    = Cmd
@@ -93,7 +93,7 @@ final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
 
   override def foldLeft[B](id: Identifier, z: B)(f: (B, Event) => B): Future[B] = {
     logger.debug("Folding over the event stream of '{}-{}'", name, id)
-    val pq = id.keyspace match {
+    val pq = id.qualifier match {
       case None =>
         PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](journalPluginId)
       case Some(ks) =>

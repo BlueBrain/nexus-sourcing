@@ -8,7 +8,6 @@ import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate.Command._
 import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate.Event._
 import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate.State._
 import ch.epfl.bluebrain.nexus.sourcing.FixturesAggregate._
-import ch.epfl.bluebrain.nexus.sourcing.PersistentId
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
@@ -37,7 +36,7 @@ class ShardingAggregateSpec
   private implicit val mt: ActorMaterializer        = ActorMaterializer()
   private implicit val ec: ExecutionContextExecutor = system.dispatcher
 
-  private def genPersistentId = PersistentId(genId, genId)
+  private def genPersistentId = PersistenceId(genId, genId)
 
   private val aggregate =
     ShardingAggregate("permission", SourcingAkkaSettings(journalPluginId = "inmemory-read-journal"))(initial,
@@ -46,7 +45,7 @@ class ShardingAggregateSpec
 
   "A ShardingAggregate" should {
     "return a 0 sequence number for an empty event log" in {
-      aggregate.lastSequenceNr(PersistentId("unknown", "keyspace")).futureValue shouldEqual 0L
+      aggregate.lastSequenceNr(PersistenceId("unknown", "keyspace")).futureValue shouldEqual 0L
     }
 
     "return a initial state for an empty event log" in {
@@ -74,8 +73,8 @@ class ShardingAggregateSpec
 
     "retrieve keyspaced events from the log separately" in {
       val id  = genId
-      val id1 = PersistentId(id, "ks1")
-      val id2 = PersistentId(id, "ks2")
+      val id1 = PersistenceId(id, "ks1")
+      val id2 = PersistenceId(id, "ks2")
       aggregate.append(id1, PermissionsAppended(own)).futureValue
       aggregate.append(id2, PermissionsAppended(ownRead)).futureValue
       aggregate.append(id1, PermissionsAppended(read)).futureValue
@@ -140,7 +139,7 @@ class ShardingAggregateSpec
     }
 
     "query over ids that are not url segment safe" in {
-      val id       = PersistentId(s"/$genId/sub", "keyspace")
+      val id       = PersistenceId(s"/$genId/sub", "keyspace")
       val appended = PermissionsAppended(own)
       aggregate.append(id, appended).futureValue
       val result = aggregate.foldLeft(id, Option.empty[Event]) { case (_, ev) => Some(ev) }

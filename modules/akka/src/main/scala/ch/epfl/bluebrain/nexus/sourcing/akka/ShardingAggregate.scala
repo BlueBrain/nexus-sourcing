@@ -22,9 +22,10 @@ import scala.util.control.NonFatal
 final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
     override val name: String,
     ref: ActorRef,
+    persistenceQuery: PersistenceQuery,
     journalPluginId: String,
     logger: LoggingAdapter
-)(implicit as: ActorSystem, ec: ExecutionContext, mt: Materializer, tm: Timeout)
+)(implicit ec: ExecutionContext, mt: Materializer, tm: Timeout)
     extends Aggregate[Future] {
 
   override type Identifier = PersistenceId
@@ -93,14 +94,12 @@ final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
 
   override def foldLeft[B](id: Identifier, z: B)(f: (B, Event) => B): Future[B] = {
     logger.debug("Folding over the event stream of '{}-{}'", name, id)
-    val pq = id.qualifier match {
-      case None =>
-        PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](journalPluginId)
-      case Some(ks) =>
-        val config = ConfigFactory.parseString(s"keyspace=$ks")
-        PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](journalPluginId, config)
+    val config = id.qualifier match {
+      case None     => ConfigFactory.empty
+      case Some(ks) => ConfigFactory.parseString(s"keyspace=$ks")
     }
-    pq.currentEventsByPersistenceId(s"$name-$id", 0L, Long.MaxValue).runFold(z) {
+    val journal = persistenceQuery.readJournalFor[CurrentEventsByPersistenceIdQuery](journalPluginId, config)
+    journal.currentEventsByPersistenceId(s"$name-$id", 0L, Long.MaxValue).runFold(z) {
       case (acc, envelope) =>
         Event.cast(envelope.event) match {
           case Some(event) =>
@@ -278,7 +277,8 @@ object ShardingAggregate {
     implicit val ec: ExecutionContext = as.dispatcher
     implicit val tm: Timeout          = Timeout(settings.askTimeout)
 
-    val logger = Logging(as, s"ShardingAggregate($name)")
+    val logger           = Logging(as, s"ShardingAggregate($name)")
+    val persistenceQuery = PersistenceQuery(as)
     val props = Props[AggregateActor[Event, State, Command, Rejection]](
       new AggregateActor(name, initial, next, eval, settings.passivationTimeout))
     val clusterShardingSettings = settings.shardingSettingsOrDefault(as)
@@ -286,6 +286,6 @@ object ShardingAggregate {
     val ref = ClusterSharding(as)
       .start(name, props, clusterShardingSettings, entityExtractor, shardExtractor(settings.shards))
 
-    new ShardingAggregate(name, ref, settings.journalPluginId, logger)
+    new ShardingAggregate(name, ref, persistenceQuery, settings.journalPluginId, logger)
   }
 }

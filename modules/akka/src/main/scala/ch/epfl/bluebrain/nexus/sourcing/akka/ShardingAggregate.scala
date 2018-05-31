@@ -10,6 +10,7 @@ import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.stream.Materializer
 import akka.util.Timeout
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
+import com.typesafe.config.ConfigFactory
 import shapeless.{Typeable, the}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -21,12 +22,13 @@ import scala.util.control.NonFatal
 final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
     override val name: String,
     ref: ActorRef,
-    pq: CurrentEventsByPersistenceIdQuery,
+    persistenceQuery: PersistenceQuery,
+    journalPluginId: String,
     logger: LoggingAdapter
 )(implicit ec: ExecutionContext, mt: Materializer, tm: Timeout)
     extends Aggregate[Future] {
 
-  override type Identifier = String
+  override type Identifier = PersistenceId
   override type Event      = Evt
   override type State      = St
   override type Command    = Cmd
@@ -92,7 +94,12 @@ final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
 
   override def foldLeft[B](id: Identifier, z: B)(f: (B, Event) => B): Future[B] = {
     logger.debug("Folding over the event stream of '{}-{}'", name, id)
-    pq.currentEventsByPersistenceId(s"$name-$id", 0L, Long.MaxValue).runFold(z) {
+    val config = id.qualifier match {
+      case None     => ConfigFactory.empty
+      case Some(ks) => ConfigFactory.parseString(s"keyspace=$ks")
+    }
+    val journal = persistenceQuery.readJournalFor[CurrentEventsByPersistenceIdQuery](journalPluginId, config)
+    journal.currentEventsByPersistenceId(s"$name-$id", 0L, Long.MaxValue).runFold(z) {
       case (acc, envelope) =>
         Event.cast(envelope.event) match {
           case Some(event) =>
@@ -194,7 +201,7 @@ final class ShardingAggregate[Evt: Typeable, St: Typeable, Cmd, Rej: Typeable](
     }
   }
 
-  override def checkEval(id: String, cmd: Cmd): Future[Option[Rejection]] = {
+  override def checkEval(id: Identifier, cmd: Cmd): Future[Option[Rejection]] = {
     logger.debug("Validating command '{}' on '{}-{}'", cmd, name, id)
     val action = CheckEval(id, cmd)
     ref ? action recoverWith {
@@ -241,7 +248,7 @@ object ShardingAggregate {
   }
 
   private[akka] val entityExtractor: ExtractEntityId = {
-    case msg: Msg => (msg.id, msg)
+    case msg: Msg => (msg.id.toString, msg)
   }
 
   /**
@@ -270,15 +277,15 @@ object ShardingAggregate {
     implicit val ec: ExecutionContext = as.dispatcher
     implicit val tm: Timeout          = Timeout(settings.askTimeout)
 
-    val logger = Logging(as, s"ShardingAggregate($name)")
+    val logger           = Logging(as, s"ShardingAggregate($name)")
+    val persistenceQuery = PersistenceQuery(as)
     val props = Props[AggregateActor[Event, State, Command, Rejection]](
       new AggregateActor(name, initial, next, eval, settings.passivationTimeout))
     val clusterShardingSettings = settings.shardingSettingsOrDefault(as)
-    val pq                      = PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](settings.journalPluginId)
 
     val ref = ClusterSharding(as)
       .start(name, props, clusterShardingSettings, entityExtractor, shardExtractor(settings.shards))
 
-    new ShardingAggregate(name, ref, pq, logger)
+    new ShardingAggregate(name, ref, persistenceQuery, settings.journalPluginId, logger)
   }
 }

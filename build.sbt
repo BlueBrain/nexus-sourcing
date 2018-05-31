@@ -28,6 +28,7 @@ scalafmt: {
 val catsVersion                 = "1.1.0"
 val akkaVersion                 = "2.5.12"
 val akkaPersistenceInMemVersion = "2.5.1.1"
+val logbackVersion              = "1.2.3"
 val shapelessVersion            = "2.3.3"
 val scalaTestVersion            = "3.0.5"
 
@@ -41,6 +42,7 @@ lazy val akkaPersistenceInMem = "com.github.dnvriend" %% "akka-persistence-inmem
 lazy val akkaTestKit          = "com.typesafe.akka"   %% "akka-testkit"              % akkaVersion
 lazy val akkaSlf4j            = "com.typesafe.akka"   %% "akka-slf4j"                % akkaVersion
 lazy val scalaTest            = "org.scalatest"       %% "scalatest"                 % scalaTestVersion
+lazy val logback              = "ch.qos.logback"      % "logback-classic"            % logbackVersion
 
 lazy val core = project
   .in(file("modules/core"))
@@ -64,6 +66,7 @@ lazy val akkaCache = project
       akkaTestKit          % Test,
       akkaPersistenceInMem % Test,
       akkaSlf4j            % Test,
+      logback              % Test,
       scalaTest            % Test
     )
   )
@@ -82,6 +85,7 @@ lazy val akka = project
       akkaTestKit          % Test,
       akkaPersistenceInMem % Test,
       akkaSlf4j            % Test,
+      logback              % Test,
       scalaTest            % Test
     )
   )

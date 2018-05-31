@@ -2,8 +2,8 @@ package ch.epfl.bluebrain.nexus.sourcing.mem
 
 import java.util.concurrent.ConcurrentHashMap
 
-import cats.{Applicative, Id}
 import cats.syntax.applicative._
+import cats.{Applicative, Id}
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.mem.MemoryAggregate.Value
 
@@ -14,25 +14,26 @@ import ch.epfl.bluebrain.nexus.sourcing.mem.MemoryAggregate.Value
   * @param initial the initial state
   * @param next    function to compute the next state considering a current state and a new event
   * @param eval    function to evaluate a new command considering a current state
-  * @tparam Evt the type of events supported by this aggregate
-  * @tparam St  the type of state maintained by this aggregate
-  * @tparam Cmd the type of commands considered by this aggregate
-  * @tparam Rej the type of rejections returned by this aggregate
+  * @tparam Ident  the type of identifier supported by this aggregate
+  * @tparam Evt    the type of events supported by this aggregate
+  * @tparam St     the type of state maintained by this aggregate
+  * @tparam Cmd    the type of commands considered by this aggregate
+  * @tparam Rej    the type of rejections returned by this aggregate
   */
-final class MemoryAggregate[Evt, St, Cmd, Rej](
+final class MemoryAggregate[Ident, Evt, St, Cmd, Rej](
     override val name: String,
     initial: St,
     next: (St, Evt) => St,
     eval: (St, Cmd) => Either[Rej, Evt]
 ) extends Aggregate[Id] {
 
-  override type Identifier = String
+  override type Identifier = Ident
   override type Event      = Evt
   override type State      = St
   override type Command    = Cmd
   override type Rejection  = Rej
 
-  private val store = new ConcurrentHashMap[String, Value[State, Event, Rejection]]()
+  private val store = new ConcurrentHashMap[Identifier, Value[State, Event, Rejection]]()
 
   override def append(id: Identifier, event: Event): Long = {
     store
@@ -73,7 +74,7 @@ final class MemoryAggregate[Evt, St, Cmd, Rej](
     value.rejection.map(rej => Left(rej)).getOrElse(Right(value.state))
   }
 
-  override def checkEval(id: String, cmd: Cmd): Option[Rejection] =
+  override def checkEval(id: Identifier, cmd: Cmd): Option[Rejection] =
     eval(currentState(id), cmd).left.toOption
 
   private val empty = Value[State, Event, Rejection](initial, Vector.empty)
@@ -91,17 +92,18 @@ object MemoryAggregate {
     * @param initial the initial state
     * @param next    function to compute the next state considering a current state and a new event
     * @param eval    function to evaluate a new command considering a current state
-    * @tparam Event     the type of events supported by this aggregate
-    * @tparam State     the type of state maintained by this aggregate
-    * @tparam Command   the type of commands considered by this aggregate
-    * @tparam Rejection the type of rejections returned by this aggregate
+    * @tparam Identifier the type of identifier supported by this aggregate
+    * @tparam Event      the type of events supported by this aggregate
+    * @tparam State      the type of state maintained by this aggregate
+    * @tparam Command    the type of commands considered by this aggregate
+    * @tparam Rejection  the type of rejections returned by this aggregate
     * @return a new aggregate instance
     */
-  final def apply[Event, State, Command, Rejection](name: String)(
+  final def apply[Identifier, Event, State, Command, Rejection](name: String)(
       initial: State,
       next: (State, Event) => State,
       eval: (State, Command) => Either[Rejection, Event]
-  ): Aggregate.Aux[Id, String, Event, State, Command, Rejection] =
+  ): Aggregate.Aux[Id, Identifier, Event, State, Command, Rejection] =
     new MemoryAggregate(name, initial, next, eval)
 
   private[mem] final case class Value[State, Event, Rejection](state: State,
@@ -134,7 +136,7 @@ object MemoryAggregate {
       override def foldLeft[B](id: Identifier, z: B)(f: (B, Event) => B): F[B] =
         agg.foldLeft(id, z)(f).pure
 
-      override def checkEval(id: Ident, cmd: Cmd): F[Option[Rejection]] =
+      override def checkEval(id: Identifier, cmd: Cmd): F[Option[Rejection]] =
         agg.checkEval(id, cmd).pure
     }
 

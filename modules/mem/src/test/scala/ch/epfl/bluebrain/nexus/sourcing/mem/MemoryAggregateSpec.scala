@@ -12,7 +12,8 @@ import scala.util.Try
 
 class MemoryAggregateSpec extends WordSpecLike with Matchers with TryValues {
 
-  private val aggregate = MemoryAggregate("permission")(initial, next, eval).toF[Try]
+  private val aggregate =
+    MemoryAggregate[String, Event, State, Command, Rejection]("permission")(initial, next, eval).toF[Try]
 
   "A MemoryAggregateSpec" should {
     "return a 0 sequence number for an empty event log" in {

@@ -25,8 +25,8 @@ scalafmt: {
  */
 
 // Dependency versions
-val catsVersion                 = "1.1.0"
-val akkaVersion                 = "2.5.12"
+val catsVersion                 = "1.4.0"
+val akkaVersion                 = "2.5.17"
 val akkaPersistenceInMemVersion = "2.5.1.1"
 val logbackVersion              = "1.2.3"
 val shapelessVersion            = "2.3.3"

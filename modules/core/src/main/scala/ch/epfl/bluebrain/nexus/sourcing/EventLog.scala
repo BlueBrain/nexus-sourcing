@@ -1,73 +1,58 @@
 package ch.epfl.bluebrain.nexus.sourcing
 
+import cats.Functor
+import cats.syntax.all._
+
 /**
-  * Typeclass definition that models an interaction with an event log.  The definition does not impose the use of a
-  * specific identifier, event type or effect handling.
+  * A log of ordered events for uniquely identifiable entities.
   *
-  * @tparam F the effect type
+  * @tparam F[_]       the event log effect type
+  * @tparam Identifier the type of identifier for entities
+  * @tparam Event      the event type
   */
-trait EventLog[F[_]] extends Serializable {
+trait EventLog[F[_], Identifier, Event] {
 
   /**
-    * The event log identifier type.
-    */
-  type Identifier
-
-  /**
-    * The event log event type.
-    */
-  type Event
-
-  /**
-    * The name can be used to discriminate between two event log instances that share parts of an event ADT.
-    *
     * @return the name of this event log.
     */
   def name: String
 
   /**
-    * Appends the argument event instance to the event log identified by the argument identifier.
+    * The last sequence number of the entity identified by __id__.
     *
-    * @param id    the identifier of the unique event log
-    * @param event the event instance to append to the log
-    * @return the sequence number that corresponds to this appended event
-    */
-  def append(id: Identifier, event: Event): F[Long]
-
-  /**
-    * The last known sequence number for the event log identified by the argument identifier.  A value of ''0L'' implies
-    * there is no record of the selected event log.
-    *
-    * @param id the identifier of the unique event log
-    * @return the last sequence number of the event log.
+    * @param id the entity identifier
+    * @return the last sequence number for the entity identified by __id__
     */
   def lastSequenceNr(id: Identifier): F[Long]
 
   /**
-    * Applies the fold function ''f'' over the sequence of events, oldest to latest, aggregating into a value of type
-    * ''B''.  If there is no record of an event log instance with the specified identifier the function will return the
-    * initial value ''z: B''.  Effects are represented under the type ''F[_]''.
+    * Appends the argument __event__ to the end of the event log of the entity identified by __id__.
     *
-    * @param id the identifier of the unique event log
-    * @param z  the initial (zero) value
-    * @param f  the fold function
-    * @tparam B the type of the resulting value
-    * @return an aggregate value computed by folding ''f'' over the selected event log event sequence
+    * @param id    the entity identifier
+    * @param event the event to append
+    * @return the sequence number that corresponds to the appended event
     */
-  def foldLeft[B](id: Identifier, z: B)(f: (B, Event) => B): F[B]
-}
-
-object EventLog {
+  def append(id: Identifier, event: Event): F[Long]
 
   /**
-    * Lifts abstract type members of an EventLog as type parameters.
+    * Folds over the event log of the entity identified by __id__ applying the binary operator to the accumulated
+    * value and each of the events in sequence. The direction of the fold is the insertion order.
     *
-    * @tparam F  the monadic effect type
-    * @tparam Id the event log identifier type
-    * @tparam Ev the event log event type
+    * @param id the entity identifier
+    * @param z  the start value (zero)
+    * @param op the binary operator
+    * @tparam B the result type of the binary operator
+    * @return the accumulated value
     */
-  type Aux[F[_], Id, Ev] = EventLog[F] {
-    type Identifier = Id
-    type Event      = Ev
-  }
+  def foldLeft[B](id: Identifier, z: B)(op: (B, Event) => B): F[B]
+
+  /**
+    * Whether an event log for entity identified by __id__ exists (any events recorded for the entity).
+    *
+    * @param id the entity identifier
+    * @param F  a functor for __F__
+    * @return true in __F__ if there are events recorded for entity with id __id__, false in __F__ otherwise
+    */
+  def exists(id: Identifier)(implicit F: Functor[F]): F[Boolean] =
+    lastSequenceNr(id).map(_ > 0)
 }

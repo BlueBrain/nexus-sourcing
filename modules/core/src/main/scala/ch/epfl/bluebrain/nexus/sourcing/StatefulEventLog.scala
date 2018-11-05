@@ -1,41 +1,29 @@
 package ch.epfl.bluebrain.nexus.sourcing
 
 /**
-  * An [[EventLog]] that maintains a default state.  As new events are appended to the log, the state of the log is
-  * automatically updated to reflect the new events.
+  * A log of ordered events for uniquely identifiable entities that also maintains a state for each individual entity.
   *
-  * @see [[EventLog]]
-  * @tparam F the effect type
+  * @tparam F[_]       the event log effect type
+  * @tparam Identifier the type of identifier for entities
+  * @tparam Event      the event type
+  * @tparam State      the state type
   */
-trait StatefulEventLog[F[_]] extends EventLog[F] {
+trait StatefulEventLog[F[_], Identifier, Event, State] extends EventLog[F, Identifier, Event] {
 
   /**
-    * The event log state type.
-    */
-  type State
-
-  /**
-    * Returns the precomputed state of the event log identified by the argument ''id''.
+    * The current state of the entity with id __id__.
     *
-    * @param id the identifier of the unique event log
-    * @return the state of the selected event log instance
+    * @param id the entity identifier
+    * @return the current state of the entity with id __id__
     */
   def currentState(id: Identifier): F[State]
-}
-
-object StatefulEventLog {
 
   /**
-    * Lifts abstract type members of an StatefulEventLog as type parameters.
+    * Takes a snapshot of the current state of the entity with id __id__.
     *
-    * @tparam F  the monadic effect type
-    * @tparam Id the event log identifier type
-    * @tparam Ev the event log event type
-    * @tparam St the event log state type
+    * @param id the entity identifier
+    * @return the sequence number corresponding to the snapshot taken
     */
-  type Aux[F[_], Id, Ev, St] = StatefulEventLog[F] {
-    type Identifier = Id
-    type Event      = Ev
-    type State      = St
-  }
+  def snapshot(id: Identifier): F[Long]
+
 }

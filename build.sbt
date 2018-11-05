@@ -26,6 +26,7 @@ scalafmt: {
 
 // Dependency versions
 val catsVersion                 = "1.4.0"
+val catsEffectVersion           = "1.0.0"
 val akkaVersion                 = "2.5.17"
 val akkaPersistenceInMemVersion = "2.5.1.1"
 val logbackVersion              = "1.2.3"
@@ -34,10 +35,12 @@ val scalaTestVersion            = "3.0.5"
 
 // Dependency modules
 lazy val catsCore             = "org.typelevel"       %% "cats-core"                 % catsVersion
+lazy val catsEffect           = "org.typelevel"       %% "cats-effect"               % catsEffectVersion
 lazy val shapeless            = "com.chuusai"         %% "shapeless"                 % shapelessVersion
 lazy val akkaPersistence      = "com.typesafe.akka"   %% "akka-persistence"          % akkaVersion
 lazy val akkaPersistenceQuery = "com.typesafe.akka"   %% "akka-persistence-query"    % akkaVersion
 lazy val akkaClusterSharding  = "com.typesafe.akka"   %% "akka-cluster-sharding"     % akkaVersion
+lazy val akkaDistributedData  = "com.typesafe.akka"   %% "akka-distributed-data"     % akkaVersion
 lazy val akkaPersistenceInMem = "com.github.dnvriend" %% "akka-persistence-inmemory" % akkaPersistenceInMemVersion
 lazy val akkaTestKit          = "com.typesafe.akka"   %% "akka-testkit"              % akkaVersion
 lazy val akkaSlf4j            = "com.typesafe.akka"   %% "akka-slf4j"                % akkaVersion
@@ -49,55 +52,29 @@ lazy val core = project
   .settings(
     name                := "sourcing-core",
     moduleName          := "sourcing-core",
-    libraryDependencies ++= Seq(catsCore, scalaTest % Test)
-  )
-
-lazy val akkaCache = project
-  .in(file("modules/akka-cache"))
-  .settings(
-    name       := "sourcing-akka-cache",
-    moduleName := "sourcing-akka-cache",
-    libraryDependencies ++= Seq(
-      akkaPersistence,
-      akkaPersistenceQuery,
-      akkaClusterSharding,
-      catsCore,
-      shapeless,
-      akkaTestKit          % Test,
-      akkaPersistenceInMem % Test,
-      akkaSlf4j            % Test,
-      logback              % Test,
-      scalaTest            % Test
-    )
+    libraryDependencies ++= Seq(catsCore, catsEffect, scalaTest % Test)
   )
 
 lazy val akka = project
   .in(file("modules/akka"))
-  .dependsOn(core % "compile->compile;test->test")
   .settings(
     name       := "sourcing-akka",
     moduleName := "sourcing-akka",
     libraryDependencies ++= Seq(
-      shapeless,
+      akkaClusterSharding,
       akkaPersistence,
       akkaPersistenceQuery,
-      akkaClusterSharding,
-      akkaTestKit          % Test,
+      catsCore,
+      catsEffect,
+      akkaDistributedData  % Test,
       akkaPersistenceInMem % Test,
       akkaSlf4j            % Test,
+      akkaTestKit          % Test,
       logback              % Test,
-      scalaTest            % Test
+      scalaTest            % Test,
     )
   )
-
-lazy val mem = project
-  .in(file("modules/mem"))
   .dependsOn(core % "compile->compile;test->test")
-  .settings(
-    name                := "sourcing-mem",
-    moduleName          := "sourcing-mem",
-    libraryDependencies ++= Seq(scalaTest % Test)
-  )
 
 lazy val root = project
   .in(file("."))
@@ -106,7 +83,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(core, akkaCache, akka, mem)
+  .aggregate(core, akka)
 
 /* ********************************************************
  ******************** Grouped Settings ********************
@@ -135,4 +112,4 @@ inThisBuild(
     releaseEarlyEnableSyncToMaven := false,
   ))
 
-addCommandAlias("review", ";clean;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")
+addCommandAlias("review", ";clean;scalafmtCheck;test:scalafmtCheck;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")

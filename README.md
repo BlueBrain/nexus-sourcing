@@ -49,7 +49,7 @@ object Rejection {
 ```
 
 And considering the following functions that describe how recovery and evaluations are executed (notice that the
-`evaluate` is defined for an arbitrary `F[_]` type that has `Timer[F]` and `Async` type class instances from
+`evaluate` is defined for an arbitrary `F[_]` type that has `Timer[F]` and `Async[F]` type class instances from
 `cats-effect`):
 
 ```

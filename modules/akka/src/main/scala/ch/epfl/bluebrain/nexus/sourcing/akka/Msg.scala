@@ -1,4 +1,5 @@
 package ch.epfl.bluebrain.nexus.sourcing.akka
+
 import akka.routing.ConsistentHashingRouter.ConsistentHashable
 
 /**
@@ -77,11 +78,12 @@ object Msg {
     * Message for replying with the outcome of evaluating a command against an aggregate.
     *
     * @param id    the persistence id
-    * @param value either a rejection or the state derived from the last command evaluation
+    * @param value either a rejection or the (state, event) generated from the last command evaluation
     * @tparam Rejection the type of rejection
     * @tparam State  the type of the event log state
+    * @tparam Event  the type of the event
     */
-  final case class Evaluated[Rejection, State](id: String, value: Either[Rejection, State]) extends Msg
+  final case class Evaluated[Rejection, State, Event](id: String, value: Either[Rejection, (State, Event)]) extends Msg
 
   /**
     * Message to check a command against an aggregate.
@@ -99,8 +101,9 @@ object Msg {
     * @param id    the persistence id
     * @param value either a rejection or the state that would be produced from the command evaluation
     * @tparam Rejection the type of rejection
+    * @tparam Event     the type of event
     */
-  final case class Tested[Rejection, State](id: String, value: Either[Rejection, State]) extends Msg
+  final case class Tested[Rejection, State, Event](id: String, value: Either[Rejection, (State, Event)]) extends Msg
 
   /**
     * Message to trigger a snapshot.

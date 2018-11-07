@@ -64,8 +64,8 @@ private[akka] abstract class AggregateActor[
 
   private var state = initialState
 
-  private implicit val timer: Timer[IO]     = IO.timer(config.commandEvalExecutionContext)
-  private implicit val cs: ContextShift[IO] = IO.contextShift(config.commandEvalExecutionContext)
+  private implicit val timer: Timer[IO]     = IO.timer(config.commandEvaluationExecutionContext)
+  private implicit val cs: ContextShift[IO] = IO.contextShift(config.commandEvaluationExecutionContext)
 
   override def preStart(): Unit = {
     super.preStart()
@@ -181,7 +181,7 @@ private[akka] abstract class AggregateActor[
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
       passivateAfterEvaluation()
     case Left(Rejection(rejection)) =>
-      previous ! Evaluated[Rejection, State](id, Left(rejection))
+      previous ! Evaluated[Rejection, State, Event](id, Left(rejection))
       log.debug("Rejected command '{}' on actor '{}' because '{}'", cmd, persistenceId, rejection)
       context.become(receiveCommand)
       unstashAll()
@@ -189,7 +189,7 @@ private[akka] abstract class AggregateActor[
     case Right(Event(event)) =>
       persist(event) { _ =>
         state = next(state, event)
-        previous ! Evaluated[Rejection, Event](id, Right(event))
+        previous ! Evaluated[Rejection, State, Event](id, Right((state, event)))
         log.debug("Applied event '{}' to actor '{}'", event, persistenceId)
         context.become(receiveCommand)
         unstashAll()
@@ -228,13 +228,13 @@ private[akka] abstract class AggregateActor[
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
       passivateAfterEvaluation()
     case Left(Rejection(rejection)) =>
-      previous ! Tested[Rejection, State](id, Left(rejection))
+      previous ! Tested[Rejection, State, Event](id, Left(rejection))
       log.debug("Rejected test command '{}' on actor '{}' because '{}'", cmd, persistenceId, rejection)
       context.become(receiveCommand)
       unstashAll()
       passivateAfterEvaluation()
     case Right(Event(event)) =>
-      previous ! Tested[Rejection, Event](id, Right(event))
+      previous ! Tested[Rejection, State, Event](id, Right((next(state, event), event)))
       log.debug("Accepted test command '{}' on actor '{}' producing '{}'", cmd, persistenceId, event)
       context.become(receiveCommand)
       unstashAll()
@@ -312,7 +312,7 @@ private[akka] abstract class AggregateActor[
   private def evaluateCommand(cmd: Command, test: Boolean = false): Unit = {
     val scope = if (test) "testing" else "evaluating"
     val eval = for {
-      _ <- IO.shift(config.commandEvalExecutionContext)
+      _ <- IO.shift(config.commandEvaluationExecutionContext)
       r <- evaluate(state, cmd).toIO.timeout(config.commandEvaluationMaxDuration)
       _ <- IO.shift(context.dispatcher)
       _ <- IO(self ! r)

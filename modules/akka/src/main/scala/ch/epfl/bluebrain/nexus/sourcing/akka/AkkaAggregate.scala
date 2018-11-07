@@ -47,11 +47,11 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
   private val F     = implicitly[Async[F]]
   private val pq    = PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](config.readJournalPluginId)
 
-  override def evaluate(id: String, command: Command): F[Either[Rejection, Event]] =
-    send(id, Evaluate(id, command), (r: Evaluated[Rejection, Event]) => r.value)
+  override def evaluate(id: String, command: Command): F[Either[Rejection, (State, Event)]] =
+    send(id, Evaluate(id, command), (r: Evaluated[Rejection, State, Event]) => r.value)
 
-  override def test(id: String, command: Command): F[Either[Rejection, Event]] =
-    send(id, Test(id, command), (r: Tested[Rejection, Event]) => r.value)
+  override def test(id: String, command: Command): F[Either[Rejection, (State, Event)]] =
+    send(id, Test(id, command), (r: Tested[Rejection, State, Event]) => r.value)
 
   override def currentState(id: String): F[State] =
     send(id, GetCurrentState(id), (r: CurrentState[State]) => r.state)

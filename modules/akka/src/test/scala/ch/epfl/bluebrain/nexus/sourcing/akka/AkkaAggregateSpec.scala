@@ -121,7 +121,7 @@ class AkkaAggregateSpec
 
         val first = genString()
 
-        agg.evaluate(first, Increment(0, 2)).unsafeRunSync().right.value
+        agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().right.value
         evaluations.get() shouldEqual 2
       }
 
@@ -182,7 +182,7 @@ class AkkaAggregateSpec
           .unsafeRunSync()
 
         val first = genString()
-        agg.evaluate(first, Increment(0, 2)).unsafeRunSync().right.value
+        agg.evaluateS(first, Increment(0, 2)).unsafeRunSync().right.value
         evaluations.get() shouldEqual 2
         retries.get() shouldEqual 1
       }
@@ -264,7 +264,7 @@ class AkkaAggregateSpec
           .unsafeRunSync()
 
         val first = genString()
-        agg.evaluate(first, Increment(0, 2)).unsafeRunSync().right.value
+        agg.evaluateS(first, Increment(0, 2)).unsafeRunSync().right.value
         evaluations.get() shouldEqual 2
       }
 
@@ -323,7 +323,7 @@ class AkkaAggregateSpec
           .unsafeRunSync()
 
         val first = genString()
-        agg.evaluate(first, Increment(0, 2)).unsafeRunSync().right.value
+        agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().right.value
         evaluations.get() shouldEqual 2
         retries.get() shouldEqual 1
       }
@@ -340,8 +340,8 @@ class AkkaAggregateSpec
     }
 
     "update its state when accepting commands" in {
-      agg.evaluate(first, Increment(0, 2)).unsafeRunSync().right.value shouldEqual Incremented(1, 2)
-      agg.evaluate(first, IncrementAsync(1, 5, 10 millis)).unsafeRunSync().right.value shouldEqual Incremented(2, 5)
+      agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().right.value shouldEqual Incremented(1, 2)
+      agg.evaluateS(first, IncrementAsync(1, 5, 10 millis)).unsafeRunSync().right.value shouldEqual Current(2, 7)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
@@ -350,21 +350,22 @@ class AkkaAggregateSpec
     }
 
     "test without applying changes" in {
-      agg.test(first, Initialize(0)).unsafeRunSync().left.value
-      agg.test(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.testE(first, Initialize(0)).unsafeRunSync().left.value
+      agg.testE(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.testS(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Current(3, 0)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
     "not update its state if evaluation fails" in {
-      agg.evaluate(first, Initialize(0)).unsafeRunSync().left.value
+      agg.evaluateS(first, Initialize(0)).unsafeRunSync().left.value
       agg.currentState(first).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
     "evaluate commands one at a time" in {
-      agg.evaluate(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.evaluateE(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(3, 0)
-      agg.evaluate(first, IncrementAsync(3, 2, 30 millis)).unsafeToFuture()
-      agg.evaluate(first, IncrementAsync(4, 2, 10 millis)).unsafeRunSync().right.value shouldEqual Incremented(5, 2)
+      agg.evaluateS(first, IncrementAsync(3, 2, 30 millis)).unsafeToFuture()
+      agg.evaluateE(first, IncrementAsync(4, 2, 10 millis)).unsafeRunSync().right.value shouldEqual Incremented(5, 2)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(5, 4)
     }
 

@@ -181,7 +181,7 @@ private[akka] abstract class AggregateActor[
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
       passivateAfterEvaluation()
     case Left(Rejection(rejection)) =>
-      previous ! Evaluated[Rejection, State](id, Left(rejection))
+      previous ! Evaluated[Rejection, State, Event](id, Left(rejection))
       log.debug("Rejected command '{}' on actor '{}' because '{}'", cmd, persistenceId, rejection)
       context.become(receiveCommand)
       unstashAll()
@@ -189,7 +189,7 @@ private[akka] abstract class AggregateActor[
     case Right(Event(event)) =>
       persist(event) { _ =>
         state = next(state, event)
-        previous ! Evaluated[Rejection, Event](id, Right(event))
+        previous ! Evaluated[Rejection, State, Event](id, Right((state, event)))
         log.debug("Applied event '{}' to actor '{}'", event, persistenceId)
         context.become(receiveCommand)
         unstashAll()
@@ -228,13 +228,13 @@ private[akka] abstract class AggregateActor[
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
       passivateAfterEvaluation()
     case Left(Rejection(rejection)) =>
-      previous ! Tested[Rejection, State](id, Left(rejection))
+      previous ! Tested[Rejection, State, Event](id, Left(rejection))
       log.debug("Rejected test command '{}' on actor '{}' because '{}'", cmd, persistenceId, rejection)
       context.become(receiveCommand)
       unstashAll()
       passivateAfterEvaluation()
     case Right(Event(event)) =>
-      previous ! Tested[Rejection, Event](id, Right(event))
+      previous ! Tested[Rejection, State, Event](id, Right((next(state, event), event)))
       log.debug("Accepted test command '{}' on actor '{}' producing '{}'", cmd, persistenceId, event)
       context.become(receiveCommand)
       unstashAll()

@@ -26,8 +26,12 @@ class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues
     }
 
     "update its state when accepting commands" in {
-      agg.evaluate(1, Increment(0, 2)).unsafeRunSync().right.value shouldEqual Incremented(1, 2)
-      agg.evaluate(1, IncrementAsync(1, 5, 200 millis)).unsafeRunSync().right.value shouldEqual Incremented(2, 5)
+      agg.evaluateE(1, Increment(0, 2)).unsafeRunSync().right.value shouldEqual Incremented(1, 2)
+      agg
+        .evaluate(1, IncrementAsync(1, 5, 200 millis))
+        .unsafeRunSync()
+        .right
+        .value shouldEqual (Current(2, 7) -> Incremented(2, 5))
       agg.currentState(1).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
@@ -37,7 +41,8 @@ class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues
 
     "test without applying changes" in {
       agg.test(1, Initialize(0)).unsafeRunSync().left.value
-      agg.test(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.testE(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.testS(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Current(3, 0)
       agg.currentState(1).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
@@ -47,10 +52,10 @@ class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues
     }
 
     "evaluate commands one at a time" in {
-      agg.evaluate(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.evaluateS(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Current(3, 0)
       agg.currentState(1).unsafeRunSync() shouldEqual Current(3, 0)
-      agg.evaluate(1, IncrementAsync(3, 2, 300 millis)).unsafeToFuture()
-      agg.evaluate(1, IncrementAsync(4, 2, 20 millis)).unsafeRunSync().right.value shouldEqual Incremented(5, 2)
+      agg.evaluateS(1, IncrementAsync(3, 2, 300 millis)).unsafeToFuture()
+      agg.evaluateE(1, IncrementAsync(4, 2, 20 millis)).unsafeRunSync().right.value shouldEqual Incremented(5, 2)
       agg.currentState(1).unsafeRunSync() shouldEqual Current(5, 4)
     }
 

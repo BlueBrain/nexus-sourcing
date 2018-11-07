@@ -2,6 +2,7 @@ package ch.epfl.bluebrain.nexus.sourcing
 
 import java.util.concurrent.ConcurrentHashMap
 
+import cats.Functor
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.effect.syntax.all._
@@ -27,10 +28,32 @@ trait Aggregate[F[_], Identifier, Event, State, Command, Rejection]
     *
     * @param id      the entity identifier
     * @param command the command to evaluate
+    * @return the newly generated state and appended event in __F__ if the command was evaluated successfully, or the
+    *         rejection of the __command__ in __F__ otherwise
+    */
+  def evaluate(id: Identifier, command: Command): F[Either[Rejection, (State, Event)]]
+
+  /**
+    * Evaluates the argument __command__ in the context of entity identified by __id__.
+    *
+    * @param id      the entity identifier
+    * @param command the command to evaluate
+    * @return the newly generated state in __F__ if the command was evaluated successfully, or the rejection of the
+    *         __command__ in __F__ otherwise
+    */
+  def evaluateS(id: Identifier, command: Command)(implicit F: Functor[F]): F[Either[Rejection, State]] =
+    evaluate(id, command).map(_.map { case (state, _) => state })
+
+  /**
+    * Evaluates the argument __command__ in the context of entity identified by __id__.
+    *
+    * @param id      the entity identifier
+    * @param command the command to evaluate
     * @return the newly appended event in __F__ if the command was evaluated successfully, or the rejection of the
     *         __command__ in __F__ otherwise
     */
-  def evaluate(id: Identifier, command: Command): F[Either[Rejection, Event]]
+  def evaluateE(id: Identifier, command: Command)(implicit F: Functor[F]): F[Either[Rejection, Event]] =
+    evaluate(id, command).map(_.map { case (_, event) => event })
 
   /**
     * Tests the evaluation the argument __command__ in the context of entity identified by __id__, without applying any
@@ -38,10 +61,34 @@ trait Aggregate[F[_], Identifier, Event, State, Command, Rejection]
     *
     * @param id      the entity identifier
     * @param command the command to evaluate
-    * @return the event that would be appended in __F__ if the command was tested for evaluation successfully, or the
+    * @return the state and event that would be generated in __F__ if the command was tested for evaluation
+    *         successfully, or the rejection of the __command__ in __F__ otherwise
+    */
+  def test(id: Identifier, command: Command): F[Either[Rejection, (State, Event)]]
+
+  /**
+    * Tests the evaluation the argument __command__ in the context of entity identified by __id__, without applying any
+    * changes to the state or event log of the entity regardless of the outcome of the command evaluation.
+    *
+    * @param id      the entity identifier
+    * @param command the command to evaluate
+    * @return the state that would be generated in __F__ if the command was tested for evaluation successfully, or the
     *         rejection of the __command__ in __F__ otherwise
     */
-  def test(id: Identifier, command: Command): F[Either[Rejection, Event]]
+  def testS(id: Identifier, command: Command)(implicit F: Functor[F]): F[Either[Rejection, State]] =
+    test(id, command).map(_.map { case (state, _) => state })
+
+  /**
+    * Tests the evaluation the argument __command__ in the context of entity identified by __id__, without applying any
+    * changes to the state or event log of the entity regardless of the outcome of the command evaluation.
+    *
+    * @param id      the entity identifier
+    * @param command the command to evaluate
+    * @return the event that would be generated in __F__ if the command was tested for evaluation successfully, or the
+    *         rejection of the __command__ in __F__ otherwise
+    */
+  def testE(id: Identifier, command: Command)(implicit F: Functor[F]): F[Either[Rejection, Event]] =
+    test(id, command).map(_.map { case (_, event) => event })
 
 }
 
@@ -64,31 +111,34 @@ private[sourcing] class InMemoryAggregate[F[_]: Concurrent, Identifier, Event, S
     } else value.pure[F]
   }
 
-  override def evaluate(id: Identifier, command: Command): F[Either[Rejection, Event]] =
+  override def evaluate(id: Identifier, command: Command): F[Either[Rejection, (State, Event)]] =
     getOrInsertDefault(id).flatMap {
       case (s, _) =>
         s.acquire.bracket { _ =>
           val (_, events) = map.get(id)
           val state       = events.foldLeft(initialState)(next)
-          evaluate(state, command).map {
-            case Left(rej) =>
-              Left(rej)
-            case r @ Right(event) =>
+          evaluate(state, command).map { either =>
+            either.map { event =>
               map.put(id, (s, events :+ event))
-              r
+              next(state, event) -> event
+            }
           }
         } { _ =>
           s.release
         }
     }
 
-  override def test(id: Identifier, command: Command): F[Either[Rejection, Event]] =
+  override def test(id: Identifier, command: Command): F[Either[Rejection, (State, Event)]] =
     getOrInsertDefault(id).flatMap {
       case (s, _) =>
         s.acquire.bracket { _ =>
           val (_, events) = map.get(id)
           val state       = events.foldLeft(initialState)(next)
-          evaluate(state, command)
+          evaluate(state, command).map { either =>
+            either.map { event =>
+              next(state, event) -> event
+            }
+          }
         } { _ =>
           s.release
         }

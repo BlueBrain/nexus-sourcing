@@ -64,8 +64,8 @@ private[akka] abstract class AggregateActor[
 
   private var state = initialState
 
-  private implicit val timer: Timer[IO]     = IO.timer(config.commandEvalExecutionContext)
-  private implicit val cs: ContextShift[IO] = IO.contextShift(config.commandEvalExecutionContext)
+  private implicit val timer: Timer[IO]     = IO.timer(config.commandEvaluationExecutionContext)
+  private implicit val cs: ContextShift[IO] = IO.contextShift(config.commandEvaluationExecutionContext)
 
   override def preStart(): Unit = {
     super.preStart()
@@ -312,7 +312,7 @@ private[akka] abstract class AggregateActor[
   private def evaluateCommand(cmd: Command, test: Boolean = false): Unit = {
     val scope = if (test) "testing" else "evaluating"
     val eval = for {
-      _ <- IO.shift(config.commandEvalExecutionContext)
+      _ <- IO.shift(config.commandEvaluationExecutionContext)
       r <- evaluate(state, cmd).toIO.timeout(config.commandEvaluationMaxDuration)
       _ <- IO.shift(context.dispatcher)
       _ <- IO(self ! r)

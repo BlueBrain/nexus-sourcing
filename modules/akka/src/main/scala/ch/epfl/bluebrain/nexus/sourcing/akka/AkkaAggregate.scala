@@ -1,5 +1,7 @@
 package ch.epfl.bluebrain.nexus.sourcing.akka
 
+import java.net.URLEncoder
+
 import akka.actor.ActorSystem
 import akka.cluster.sharding.ShardRegion.{ExtractEntityId, ExtractShardId}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
@@ -82,7 +84,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
 
   override def foldLeft[B](id: String, z: B)(f: (B, Event) => B): F[B] = {
     val future = pq
-      .currentEventsByPersistenceId(id, 0L, Long.MaxValue)
+      .currentEventsByPersistenceId(s"$name-${URLEncoder.encode(id, "UTF-8")}", 0L, Long.MaxValue)
       .runFold(z) { (acc: B, el: EventEnvelope) =>
         el.event match {
           case Event(ev) => f(acc, ev)

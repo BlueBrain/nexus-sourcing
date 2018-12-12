@@ -68,6 +68,10 @@ class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues
         ._2 shouldEqual true
     }
 
+    "return all events" in {
+      agg.foldLeft(1, 0) { case (acc, _) => acc + 1 }.unsafeRunSync() shouldEqual 5
+    }
+
     "append events" in {
       agg.append(2, Incremented(1, 2)).unsafeRunSync() shouldEqual 1L
       agg.currentState(1).unsafeRunSync() shouldEqual Current(5, 4)

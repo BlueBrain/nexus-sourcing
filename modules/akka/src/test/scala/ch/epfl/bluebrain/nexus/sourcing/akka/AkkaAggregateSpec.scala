@@ -378,6 +378,10 @@ class AkkaAggregateSpec
       success shouldEqual true
     }
 
+    "return all events" in {
+      agg.foldLeft(first, 0) { case (acc, _) => acc + 1 }.unsafeRunSync() shouldEqual 5
+    }
+
     "append events" in {
       agg.append(second, Incremented(1, 2)).unsafeRunSync() shouldEqual 1L
       agg.currentState(second).unsafeRunSync() shouldEqual Current(1, 2)

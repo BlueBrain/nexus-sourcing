@@ -16,6 +16,7 @@ import ch.epfl.bluebrain.nexus.sourcing.Event._
 import ch.epfl.bluebrain.nexus.sourcing.State.Current
 import ch.epfl.bluebrain.nexus.sourcing._
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
+import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.AkkaSourcingConfig
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, EitherValues, Matchers, WordSpecLike}
 

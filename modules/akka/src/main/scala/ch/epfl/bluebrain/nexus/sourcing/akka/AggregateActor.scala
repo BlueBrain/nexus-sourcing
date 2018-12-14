@@ -9,7 +9,6 @@ import cats.effect.syntax.all._
 import cats.effect.{ContextShift, Effect, IO, Timer}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.AkkaSourcingConfig
 
 import scala.collection.mutable
 import scala.reflect.ClassTag

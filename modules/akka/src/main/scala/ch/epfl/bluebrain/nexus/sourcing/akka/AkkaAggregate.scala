@@ -15,7 +15,6 @@ import cats.effect.{Async, Effect, IO}
 import cats.syntax.all._
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.AkkaSourcingConfig
 
 import scala.reflect.ClassTag
 

@@ -61,6 +61,19 @@ final case class SourcingConfig(
       passivation.lapsedSinceRecoveryCompleted,
       shouldPassivate
     )
+
+  /**
+    * Computes a retry strategy from the provided configuration.
+    */
+  def retryStrategy[F[_]: Timer, E](implicit F: ApplicativeError[F, E]): RetryStrategy[F] =
+    retry.strategy match {
+      case "exponential" =>
+        RetryStrategy.exponentialBackoff(retry.initialDelay, retry.maxRetries, retry.factor)
+      case "once" =>
+        RetryStrategy.once
+      case _ =>
+        RetryStrategy.never
+    }
 }
 
 object SourcingConfig {
@@ -92,32 +105,6 @@ object SourcingConfig {
       initialDelay: FiniteDuration,
       maxRetries: Int,
       factor: Int
-  ) {
+  )
 
-    /**
-      * Computes a retry strategy from the provided configuration.
-      */
-    def retryStrategy[F[_]: Timer, E](implicit F: ApplicativeError[F, E]): RetryStrategy[F] =
-      strategy match {
-        case "exponential" =>
-          RetryStrategy.exponentialBackoff(initialDelay, maxRetries, factor)
-        case "once" =>
-          RetryStrategy.once
-        case _ =>
-          RetryStrategy.never
-      }
-  }
-
-  /**
-    * Configuration for the akka sourcing implementation.
-    *
-    * @param askTimeout                        maximum duration to wait for a reply when communicating with an aggregate actor
-    * @param readJournalPluginId               the id of the read journal for querying across entity event logs
-    * @param commandEvaluationMaxDuration      the maximum amount of time allowed for a command to evaluate before cancelled
-    * @param commandEvaluationExecutionContext the execution context where command evaluation is executed
-    */
-  final case class AkkaSourcingConfig(askTimeout: Timeout,
-                                      readJournalPluginId: String,
-                                      commandEvaluationMaxDuration: FiniteDuration,
-                                      commandEvaluationExecutionContext: ExecutionContext)
 }

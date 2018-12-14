@@ -32,20 +32,22 @@ val akkaPersistenceInMemVersion = "2.5.1.1"
 val logbackVersion              = "1.2.3"
 val shapelessVersion            = "2.3.3"
 val scalaTestVersion            = "3.0.5"
+val pureconfigVersion           = "0.9.2"
 
 // Dependency modules
-lazy val catsCore             = "org.typelevel"       %% "cats-core"                 % catsVersion
-lazy val catsEffect           = "org.typelevel"       %% "cats-effect"               % catsEffectVersion
-lazy val shapeless            = "com.chuusai"         %% "shapeless"                 % shapelessVersion
-lazy val akkaPersistence      = "com.typesafe.akka"   %% "akka-persistence"          % akkaVersion
-lazy val akkaPersistenceQuery = "com.typesafe.akka"   %% "akka-persistence-query"    % akkaVersion
-lazy val akkaClusterSharding  = "com.typesafe.akka"   %% "akka-cluster-sharding"     % akkaVersion
-lazy val akkaDistributedData  = "com.typesafe.akka"   %% "akka-distributed-data"     % akkaVersion
-lazy val akkaPersistenceInMem = "com.github.dnvriend" %% "akka-persistence-inmemory" % akkaPersistenceInMemVersion
-lazy val akkaTestKit          = "com.typesafe.akka"   %% "akka-testkit"              % akkaVersion
-lazy val akkaSlf4j            = "com.typesafe.akka"   %% "akka-slf4j"                % akkaVersion
-lazy val scalaTest            = "org.scalatest"       %% "scalatest"                 % scalaTestVersion
-lazy val logback              = "ch.qos.logback"      % "logback-classic"            % logbackVersion
+lazy val catsCore             = "org.typelevel"         %% "cats-core"                 % catsVersion
+lazy val catsEffect           = "org.typelevel"         %% "cats-effect"               % catsEffectVersion
+lazy val shapeless            = "com.chuusai"           %% "shapeless"                 % shapelessVersion
+lazy val akkaPersistence      = "com.typesafe.akka"     %% "akka-persistence"          % akkaVersion
+lazy val akkaPersistenceQuery = "com.typesafe.akka"     %% "akka-persistence-query"    % akkaVersion
+lazy val akkaClusterSharding  = "com.typesafe.akka"     %% "akka-cluster-sharding"     % akkaVersion
+lazy val akkaDistributedData  = "com.typesafe.akka"     %% "akka-distributed-data"     % akkaVersion
+lazy val akkaPersistenceInMem = "com.github.dnvriend"   %% "akka-persistence-inmemory" % akkaPersistenceInMemVersion
+lazy val akkaTestKit          = "com.typesafe.akka"     %% "akka-testkit"              % akkaVersion
+lazy val akkaSlf4j            = "com.typesafe.akka"     %% "akka-slf4j"                % akkaVersion
+lazy val scalaTest            = "org.scalatest"         %% "scalatest"                 % scalaTestVersion
+lazy val logback              = "ch.qos.logback"        % "logback-classic"            % logbackVersion
+lazy val pureconfig           = "com.github.pureconfig" %% "pureconfig"                % pureconfigVersion
 
 lazy val core = project
   .in(file("modules/core"))
@@ -72,6 +74,7 @@ lazy val akka = project
       akkaTestKit          % Test,
       logback              % Test,
       scalaTest            % Test,
+      pureconfig           % Test
     )
   )
   .dependsOn(core % "compile->compile;test->test")

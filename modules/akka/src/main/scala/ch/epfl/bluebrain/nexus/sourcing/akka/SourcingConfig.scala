@@ -60,17 +60,6 @@ final case class SourcingConfig(
       passivation.lapsedSinceRecoveryCompleted,
       shouldPassivate
     )
-
-  /**
-    * Computes a retry strategy from the provided configuration.
-    */
-  def retryStrategy: RetryStrategy =
-    retry.strategy match {
-      case "exponential" => Backoff(retry.initialDelay, retry.maxDelay, retry.maxRetries, retry.factor)
-      case "linear"      => Linear(retry.initialDelay, retry.maxDelay, retry.maxRetries, retry.increment)
-      case "once"        => Once(retry.initialDelay)
-      case _             => Never
-    }
 }
 
 object SourcingConfig {
@@ -106,6 +95,18 @@ object SourcingConfig {
       maxRetries: Int,
       factor: Double,
       increment: FiniteDuration
-  )
+  ) {
+
+    /**
+      * Computes a retry strategy from the provided configuration.
+      */
+    def retryStrategy: RetryStrategy =
+      strategy match {
+        case "exponential" => Backoff(initialDelay, maxDelay, maxRetries, factor)
+        case "linear"      => Linear(initialDelay, maxDelay, maxRetries, increment)
+        case "once"        => Once(initialDelay)
+        case _             => Never
+      }
+  }
 
 }

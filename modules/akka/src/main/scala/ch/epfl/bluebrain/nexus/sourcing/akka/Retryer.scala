@@ -59,7 +59,7 @@ object Retryer {
     }
 }
 
-abstract class RetryerMap[F[_], E] {
+abstract class RetryerMap[F[_], E] extends Retryer[F] {
 
   /**
     * Returns a new value computed from the ''pf''. Retries with a preconfigured retry mechanism
@@ -82,6 +82,10 @@ object RetryerMap {
     */
   def apply[F[_], E](strategy: RetryStrategy)(implicit F: MonadError[F, E], T: Timer[F]): RetryerMap[F, E] =
     new RetryerMap[F, E] {
+
+      private val underlying = Retryer[F, E](strategy)
+
+      override def apply[A](fa: F[A]) = underlying.apply(fa)
 
       override def apply[A, B](fa: F[A], pf: PartialFunction[A, B], onMapFailure: => E): F[B] = {
         def inner(previousDelay: FiniteDuration, currentRetries: Int): F[B] = {

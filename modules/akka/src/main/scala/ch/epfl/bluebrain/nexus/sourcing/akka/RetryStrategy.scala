@@ -1,8 +1,5 @@
 package ch.epfl.bluebrain.nexus.sourcing.akka
 
-import cats.MonadError
-import cats.effect.Timer
-
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -17,16 +14,6 @@ sealed trait RetryStrategy extends Product with Serializable {
     * @param retries the current amount of retries
     */
   def next(current: FiniteDuration, retries: Int): Option[FiniteDuration]
-
-  /**
-    * Generates a retryer from the current strategy
-    */
-  def retryer[F[_]: Timer, E](implicit F: MonadError[F, E]): Retryer[F] = Retryer.apply[F, E](this)
-
-  /**
-    * Generates a map retryer from the current strategy
-    */
-  def retryerMap[F[_]: Timer, E](implicit F: MonadError[F, E]): RetryerMap[F, E] = RetryerMap.apply[F, E](this)
 }
 
 object RetryStrategy {

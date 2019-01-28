@@ -6,6 +6,9 @@ import cats.effect.Timer
 import scala.concurrent.duration._
 import scala.util.Random
 
+/**
+  * Enumeration of retry strategy types
+  */
 sealed trait RetryStrategyType extends Product with Serializable {
 
   /**

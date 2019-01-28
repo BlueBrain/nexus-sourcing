@@ -134,41 +134,5 @@ class RetryerSpec
         .futureValue(timeout(1600 millis)) shouldBe a[IllegalArgumentException]
       count.get shouldEqual 5
     }
-//
-//      "retry linearly when it fails" in new Context {
-//        retry(future, 4, Linear(5 seconds, 300 millis)).failed
-//          .futureValue(timeout(Span(3, Seconds))) shouldBe SomeError
-//        count.get shouldEqual 5
-//      }
-//
-//      "retry linearly when it fails capped to 200 mills" in new Context {
-//        retry(future, 5, Linear(200 millis, 200 millis)).failed
-//          .futureValue(timeout(Span(1, Seconds))) shouldBe SomeError
-//        count.get shouldEqual 6
-//      }
-//
-//      "don't retry when having a successful future" in new Context {
-//        val f = () => Future[Long](count.incrementAndGet())
-//        retry(f, 1, Backoff(5 seconds, 0.2)).futureValue shouldEqual 1L
-//      }
-//
-//      "retry when the condition is not satisfied" in new Condition(2) {
-//        private implicit val backoff = Backoff(1 seconds, 0)
-//        future.retryWhenNot { case Some(a) => a }.futureValue shouldEqual 2L
-//        count.get shouldEqual 2
-//      }
-//
-//
-//      "retry exponentially when it fails capped to 1 second" in new Context {
-//        private implicit val backoff = Backoff(1 seconds, 0)
-//        task.retry(3).runToFuture.failed.futureValue(timeout(Span(3, Seconds))) shouldBe SomeError
-//        count.get shouldEqual 4
-//      }
-//
-//      "retry when the condition is not satisfied" in new Condition(3) {
-//        private implicit val backoff = Backoff(1 seconds, 0)
-//        task.retryWhenNot { case Some(a) => a }.runToFuture.futureValue shouldEqual 3L
-//        count.get shouldEqual 3
-//    }
   }
 }

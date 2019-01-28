@@ -15,6 +15,7 @@ import cats.effect.{Async, Effect, IO}
 import cats.syntax.all._
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
+import ch.epfl.bluebrain.nexus.sourcing.akka.syntax._
 
 import scala.reflect.ClassTag
 
@@ -44,6 +45,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
     extends Aggregate[F, String, Event, State, Command, Rejection] {
 
   private implicit val timeout: Timeout = config.askTimeout
+  private implicit val retryer          = retryStrategy
 
   private val Event = implicitly[ClassTag[Event]]
   private val F     = implicitly[Async[F]]
@@ -71,15 +73,15 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
     selection(name, id).flatMap { ref =>
       val future = IO(ref ? msg)
       val fa     = IO.fromFuture(future).to[F]
-      val mappedFA = fa.flatMap[A] {
-        case Reply(r)                         => F.pure(f(r))
-        case te: TypeError                    => F.raiseError(te)
-        case um: UnexpectedMsgId              => F.raiseError(um)
-        case cet: CommandEvaluationTimeout[_] => F.raiseError(cet)
-        case cee: CommandEvaluationError[_]   => F.raiseError(cee)
-        case other                            => F.raiseError(TypeError(id, Reply.runtimeClass.getSimpleName, other))
-      }
-      retryStrategy(mappedFA)
+      fa.flatMap[A] {
+          case Reply(r)                         => F.pure(f(r))
+          case te: TypeError                    => F.raiseError(te)
+          case um: UnexpectedMsgId              => F.raiseError(um)
+          case cet: CommandEvaluationTimeout[_] => F.raiseError(cet)
+          case cee: CommandEvaluationError[_]   => F.raiseError(cee)
+          case other                            => F.raiseError(TypeError(id, Reply.runtimeClass.getSimpleName, other))
+        }
+        .retry
     }
 
   override def foldLeft[B](id: String, z: B)(f: (B, Event) => B): F[B] = {
@@ -91,8 +93,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
           case _         => acc
         }
       }
-    val fr = IO.fromFuture(IO(future)).to[F]
-    retryStrategy(fr)
+    IO.fromFuture(IO(future)).to[F].retry
   }
 }
 

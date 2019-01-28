@@ -2,8 +2,9 @@ package ch.epfl.bluebrain.nexus.sourcing.akka
 
 import akka.actor.ActorSystem
 import akka.util.Timeout
-import cats.ApplicativeError
+import cats.MonadError
 import cats.effect.Timer
+import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategyType._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig._
 
 import scala.concurrent.ExecutionContext
@@ -65,15 +66,15 @@ final case class SourcingConfig(
   /**
     * Computes a retry strategy from the provided configuration.
     */
-  def retryStrategy[F[_]: Timer, E](implicit F: ApplicativeError[F, E]): RetryStrategy[F] =
-    retry.strategy match {
-      case "exponential" =>
-        RetryStrategy.exponentialBackoff(retry.initialDelay, retry.maxRetries, retry.factor)
-      case "once" =>
-        RetryStrategy.once
-      case _ =>
-        RetryStrategy.never
+  def retryStrategy[F[_]: Timer, E](implicit F: MonadError[F, E]): Retryer[F, E] = {
+    val retryer: RetryStrategyType = retry.strategy match {
+      case "exponential" => Backoff(retry.initialDelay, retry.maxDelay, retry.maxRetries, retry.factor)
+      case "linear"      => Linear(retry.initialDelay, retry.maxDelay, retry.maxRetries, retry.increment)
+      case "once"        => Once(retry.initialDelay)
+      case _             => Never
     }
+    retryer.retryOn[F, E]
+  }
 }
 
 object SourcingConfig {
@@ -96,15 +97,19 @@ object SourcingConfig {
     *
     * @param strategy     the type of strategy; possible options are "never", "once" and "exponential"
     * @param initialDelay the initial delay before retrying that will be multiplied with the 'factor' for each attempt
-    *                     (applicable only for strategy "exponential")
+    *                     (applicable for strategy "exponential" and "linear")
+    * @param maxDelay     the maximum delay (applicable for strategy "exponential" and "linear")
     * @param maxRetries   maximum number of retries in case of failure (applicable only for strategy "exponential")
     * @param factor       the exponential factor (applicable only for strategy "exponential")
+    * @param increment    the linear increment (applicable only for strategy "linear")
     */
   final case class RetryStrategyConfig(
       strategy: String,
       initialDelay: FiniteDuration,
+      maxDelay: FiniteDuration,
       maxRetries: Int,
-      factor: Int
+      factor: Double,
+      increment: FiniteDuration
   )
 
 }

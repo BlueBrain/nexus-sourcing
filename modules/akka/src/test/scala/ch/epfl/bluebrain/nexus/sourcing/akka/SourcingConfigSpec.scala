@@ -7,6 +7,7 @@ import akka.testkit.TestKit
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategyConfig, RetryStrategyConfig}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{Matchers, OptionValues, WordSpecLike}
+import pureconfig.generic.auto._
 import pureconfig.loadConfigOrThrow
 
 import scala.concurrent.ExecutionContext
@@ -25,7 +26,7 @@ class SourcingConfigSpec
     "global",
     10,
     PassivationStrategyConfig(Some(5 seconds), Some(0 milliseconds)),
-    RetryStrategyConfig("exponential", 100 milliseconds, 7, 2)
+    RetryStrategyConfig("exponential", 100 milliseconds, 10 hours, 7, 2.0, 500 milliseconds)
   )
 
   "SourcingConfig" should {

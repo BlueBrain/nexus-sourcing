@@ -1,7 +1,7 @@
 package ch.epfl.bluebrain.nexus.sourcing.akka.syntax
 
 import ch.epfl.bluebrain.nexus.sourcing.akka.syntax.RetrySyntax.RetryOps
-import ch.epfl.bluebrain.nexus.sourcing.akka.{RetryStrategy, Retryer}
+import ch.epfl.bluebrain.nexus.sourcing.akka.{Retryer, RetryerMap}
 
 class RetrySyntax {
   implicit def retrySyntax[F[_], A](fa: F[A]) = new RetryOps[F, A](fa)
@@ -15,8 +15,8 @@ object RetrySyntax {
       *
       * @return a new value in the same context type, but with a preconfigured retry mechanism
       */
-    def retry(implicit strategy: RetryStrategy[F]): F[A] =
-      strategy.apply(fa)
+    def retry(implicit retryer: Retryer[F]): F[A] =
+      retryer.apply(fa)
 
     /**
       * Returns a new value computed from the ''pf''. Retries with a preconfigured retry mechanism
@@ -26,7 +26,7 @@ object RetrySyntax {
       * @tparam B the type of the output value
       * @return a new value computed from the ''pf'' in the same context type
       */
-    def mapRetry[E, B](pf: PartialFunction[A, B], onMapFailure: => E)(implicit retryer: Retryer[F, E]): F[B] =
+    def mapRetry[E, B](pf: PartialFunction[A, B], onMapFailure: => E)(implicit retryer: RetryerMap[F, E]): F[B] =
       retryer.apply(fa, pf, onMapFailure)
 
   }

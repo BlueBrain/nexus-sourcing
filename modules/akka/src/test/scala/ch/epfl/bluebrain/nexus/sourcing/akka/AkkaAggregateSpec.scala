@@ -49,7 +49,7 @@ class AkkaAggregateSpec
 
     "configured with immediate passivation an no retries" should {
       val passivation = PassivationStrategy.immediately[State, Command]
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "immediate-passivation-no-retries"
       val agg = AkkaAggregate
         .sharded[IO](name, initialState, next, evaluate[IO], passivation, retry, config, shards = 10)
@@ -62,7 +62,7 @@ class AkkaAggregateSpec
 
     "configured with no passivation an no retries" should {
       val passivation = PassivationStrategy.never[State, Command]
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "no-passivation-no-retries"
       val agg = AkkaAggregate
         .sharded[IO](name, initialState, next, evaluate[IO], passivation, retry, config, shards = 10)
@@ -75,7 +75,7 @@ class AkkaAggregateSpec
 
     "configured with fixed passivation an no retries" should {
       val passivation = PassivationStrategy.lapsedSinceRecoveryCompleted[State, Command](10.milliseconds.dilated)
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "fixed-passivation-no-retries"
       val agg = AkkaAggregate
         .sharded[IO](name, initialState, next, evaluate[IO], passivation, retry, config, shards = 10)
@@ -88,7 +88,7 @@ class AkkaAggregateSpec
 
     "configured with interaction passivation an no retries" should {
       val passivation = PassivationStrategy.lapsedSinceLastInteraction[State, Command](10.milliseconds.dilated)
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "interaction-passivation-no-retries"
       val agg = AkkaAggregate
         .sharded[IO](name, initialState, next, evaluate[IO], passivation, retry, config, shards = 10)
@@ -114,7 +114,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(1)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-success"
-        val retry            = RetryStrategyType.Once(10 millis).retryOn[IO, Throwable]
+        val retry            = RetryStrategy.Once(10 millis).retryer[IO, Throwable]
         val agg = AkkaAggregate
           .sharded[IO](name, initialState, next, f, passivation, retry, config, shards = 10)
           .unsafeRunSync()
@@ -129,7 +129,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-failure"
-        val retry            = RetryStrategyType.Once(10 millis).retryOn[IO, Throwable]
+        val retry            = RetryStrategy.Once(10 millis).retryer[IO, Throwable]
         val agg = AkkaAggregate
           .sharded[IO](name, initialState, next, f, passivation, retry, config, shards = 10)
           .unsafeRunSync()
@@ -147,7 +147,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-exponential-retry-failure"
-        val retry            = RetryStrategyType.Backoff(10 millis, 10 seconds, 3, 0.0).retryOn[IO, Throwable]
+        val retry            = RetryStrategy.Backoff(10 millis, 10 seconds, 3, 0.0).retryer[IO, Throwable]
 
         val agg = AkkaAggregate
           .sharded[IO](name, initialState, next, f, passivation, retry, config, shards = 10)
@@ -172,7 +172,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(1)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-kretry-success"
-        val retry = RetryStrategy(new FunctionK[IO, IO] {
+        val retry = Retryer(new FunctionK[IO, IO] {
           override def apply[A](fa: IO[A]): IO[A] = fa.handleErrorWith { _ =>
             retries.incrementAndGet()
             fa
@@ -194,7 +194,7 @@ class AkkaAggregateSpec
 
     "configured with immediate passivation an no retries" should {
       val passivation = PassivationStrategy.immediately[State, Command]
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "immediate-passivation-no-retries"
       val agg = AkkaAggregate
         .tree[IO](name, initialState, next, evaluate[IO], passivation, retry, config, poolSize = 10)
@@ -207,7 +207,7 @@ class AkkaAggregateSpec
 
     "configured with no passivation an no retries" should {
       val passivation = PassivationStrategy.never[State, Command]
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "no-passivation-no-retries"
       val agg = AkkaAggregate
         .tree[IO](name, initialState, next, evaluate[IO], passivation, retry, config, poolSize = 10)
@@ -220,7 +220,7 @@ class AkkaAggregateSpec
 
     "configured with fixed passivation an no retries" should {
       val passivation = PassivationStrategy.lapsedSinceRecoveryCompleted[State, Command](10.milliseconds.dilated)
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "fixed-passivation-no-retries"
       val agg = AkkaAggregate
         .tree[IO](name, initialState, next, evaluate[IO], passivation, retry, config, poolSize = 10)
@@ -233,7 +233,7 @@ class AkkaAggregateSpec
 
     "configured with interaction passivation an no retries" should {
       val passivation = PassivationStrategy.lapsedSinceLastInteraction[State, Command](10.milliseconds.dilated)
-      val retry       = RetryStrategyType.Never.retryOn[IO, Throwable]
+      val retry       = RetryStrategy.Never.retryer[IO, Throwable]
       val name        = "interaction-passivation-no-retries"
       val agg = AkkaAggregate
         .tree[IO](name, initialState, next, evaluate[IO], passivation, retry, config, poolSize = 10)
@@ -259,7 +259,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(1)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-success"
-        val retry            = RetryStrategyType.Once(10 millis).retryOn[IO, Throwable]
+        val retry            = RetryStrategy.Once(10 millis).retryer[IO, Throwable]
         val agg = AkkaAggregate
           .tree[IO](name, initialState, next, f, passivation, retry, config, poolSize = 10)
           .unsafeRunSync()
@@ -273,7 +273,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-failure"
-        val retry            = RetryStrategyType.Once(10 millis).retryOn[IO, Throwable]
+        val retry            = RetryStrategy.Once(10 millis).retryer[IO, Throwable]
         val agg = AkkaAggregate
           .tree[IO](name, initialState, next, f, passivation, retry, config, poolSize = 10)
           .unsafeRunSync()
@@ -290,7 +290,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-exponential-retry-failure"
-        val retry            = RetryStrategyType.Backoff(10 millis, 10 seconds, 3, 0.0).retryOn[IO, Throwable]
+        val retry            = RetryStrategy.Backoff(10 millis, 10 seconds, 3, 0.0).retryer[IO, Throwable]
         val agg = AkkaAggregate
           .tree[IO](name, initialState, next, f, passivation, retry, config, poolSize = 10)
           .unsafeRunSync()
@@ -313,7 +313,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(1)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-kretry-success"
-        val retry = RetryStrategy(new FunctionK[IO, IO] {
+        val retry = Retryer(new FunctionK[IO, IO] {
           override def apply[A](fa: IO[A]): IO[A] = fa.handleErrorWith { _ =>
             retries.incrementAndGet()
             fa

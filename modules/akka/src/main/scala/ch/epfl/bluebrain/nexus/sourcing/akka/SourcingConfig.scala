@@ -2,9 +2,7 @@ package ch.epfl.bluebrain.nexus.sourcing.akka
 
 import akka.actor.ActorSystem
 import akka.util.Timeout
-import cats.MonadError
-import cats.effect.Timer
-import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategyType._
+import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig._
 
 import scala.concurrent.ExecutionContext
@@ -66,15 +64,13 @@ final case class SourcingConfig(
   /**
     * Computes a retry strategy from the provided configuration.
     */
-  def retryStrategy[F[_]: Timer, E](implicit F: MonadError[F, E]): Retryer[F, E] = {
-    val retryer: RetryStrategyType = retry.strategy match {
+  def retryStrategy: RetryStrategy =
+    retry.strategy match {
       case "exponential" => Backoff(retry.initialDelay, retry.maxDelay, retry.maxRetries, retry.factor)
       case "linear"      => Linear(retry.initialDelay, retry.maxDelay, retry.maxRetries, retry.increment)
       case "once"        => Once(retry.initialDelay)
       case _             => Never
     }
-    retryer.retryOn[F, E]
-  }
 }
 
 object SourcingConfig {

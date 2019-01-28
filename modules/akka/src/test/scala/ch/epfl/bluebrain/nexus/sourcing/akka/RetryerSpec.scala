@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.testkit._
 import cats.effect.{ContextShift, IO, Timer}
-import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategyType.{Backoff, Linear, Never, Once}
+import ch.epfl.bluebrain.nexus.sourcing.akka.RetryStrategy.{Backoff, Linear, Never, Once}
 import ch.epfl.bluebrain.nexus.sourcing.akka.syntax._
 import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
@@ -59,62 +59,62 @@ class RetryerSpec
   "A Retryer" should {
 
     "retry exponentially when it fails" in new IncrementAndFail {
-      val strategy: RetryStrategyType = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
+      implicit val r              = strategy.retryer[IO, Throwable]
       //Should retry at 100 mills + 200 millis + 400 millis + 800 millis
       val _ = fa.retry.unsafeToFuture().failed.futureValue(timeout(1600 millis)) shouldBe a[RuntimeException]
       count.get shouldEqual 5
     }
 
     "retry exponentially when it fails (capped)" in new IncrementAndFail {
-      val strategy: RetryStrategyType = Backoff(200 millis, 200 millis, maxRetries = 3, randomFactor = 0.0)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Backoff(200 millis, 200 millis, maxRetries = 3, randomFactor = 0.0)
+      implicit val r              = strategy.retryer[IO, Throwable]
       //Should retry at 200 mills + 200 mills + 200 mills
       val _ = fa.retry.unsafeToFuture().failed.futureValue(timeout(700 millis)) shouldBe a[RuntimeException]
       count.get shouldEqual 4
     }
 
     "retry linearly when it fails" in new IncrementAndFail {
-      val strategy: RetryStrategyType = Linear(100 millis, 2.5 second, maxRetries = 4, increment = 150 millis)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Linear(100 millis, 2.5 second, maxRetries = 4, increment = 150 millis)
+      implicit val r              = strategy.retryer[IO, Throwable]
       //Should retry at 100 mills + 250 millis + 400 millis + 550 millis
       val _ = fa.retry.unsafeToFuture().failed.futureValue(timeout(1400 millis)) shouldBe a[RuntimeException]
       count.get shouldEqual 5
     }
 
     "retry linearly when it fails (capped)" in new IncrementAndFail {
-      val strategy: RetryStrategyType = Linear(200 millis, 200 millis, maxRetries = 3)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Linear(200 millis, 200 millis, maxRetries = 3)
+      implicit val r              = strategy.retryer[IO, Throwable]
       //Should retry at 200 mills + 200 mills + 200 mills
       val _ = fa.retry.unsafeToFuture().failed.futureValue(timeout(700 millis)) shouldBe a[RuntimeException]
       count.get shouldEqual 4
     }
 
     "not retry with Never strategy" in new IncrementAndFail {
-      val strategy: RetryStrategyType = Never
-      implicit val r                  = strategy.retryOn[IO, Throwable]
-      val _                           = fa.retry.unsafeToFuture().failed.futureValue(timeout(100 millis)) shouldBe a[RuntimeException]
+      val strategy: RetryStrategy = Never
+      implicit val r              = strategy.retryer[IO, Throwable]
+      val _                       = fa.retry.unsafeToFuture().failed.futureValue(timeout(100 millis)) shouldBe a[RuntimeException]
       count.get shouldEqual 1
     }
 
     "retry once strategy" in new IncrementAndFail {
-      val strategy: RetryStrategyType = Once(100 millis)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
-      val _                           = fa.retry.unsafeToFuture().failed.futureValue(timeout(300 millis)) shouldBe a[RuntimeException]
+      val strategy: RetryStrategy = Once(100 millis)
+      implicit val r              = strategy.retryer[IO, Throwable]
+      val _                       = fa.retry.unsafeToFuture().failed.futureValue(timeout(300 millis)) shouldBe a[RuntimeException]
       count.get shouldEqual 2
     }
 
     "retry until it passes" in new IncrementAndPass(3) {
-      val strategy: RetryStrategyType = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
+      implicit val r              = strategy.retryer[IO, Throwable]
       //Should retry at 100 mills + 200 millis
       val _ = fa.retry.unsafeToFuture().futureValue(timeout(400 millis))
       count.get shouldEqual 3
     }
 
     "retry until condition satisfied" in new IncrementCondition(3) {
-      val strategy: RetryStrategyType = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
+      implicit val r              = strategy.retryerMap[IO, Throwable]
       //Should retry at 100 mills + 200 millis
       val _ = fa
         .mapRetry({ case Some(v) => v }, new IllegalArgumentException: Throwable)
@@ -124,8 +124,8 @@ class RetryerSpec
     }
 
     "retry and fail when condition never satisfied" in new IncrementCondition(10) {
-      val strategy: RetryStrategyType = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
-      implicit val r                  = strategy.retryOn[IO, Throwable]
+      val strategy: RetryStrategy = Backoff(100 millis, 2.5 second, maxRetries = 4, randomFactor = 0.0)
+      implicit val r              = strategy.retryerMap[IO, Throwable]
       //Should retry at 100 mills + 200 millis + 400 millis + 800 millis
       val _ = fa
         .mapRetry({ case Some(v) => v }, new IllegalArgumentException: Throwable)

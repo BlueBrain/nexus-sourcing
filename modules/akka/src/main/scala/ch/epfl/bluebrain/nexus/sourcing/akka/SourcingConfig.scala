@@ -102,8 +102,8 @@ object SourcingConfig {
       */
     def retryStrategy: RetryStrategy =
       strategy match {
-        case "exponential" => Backoff(initialDelay, maxDelay, maxRetries, factor)
-        case "linear"      => Linear(initialDelay, maxDelay, maxRetries, increment)
+        case "exponential" => Backoff(initialDelay, maxDelay, factor, maxRetries)
+        case "linear"      => Linear(initialDelay, maxDelay, increment, maxRetries)
         case "once"        => Once(initialDelay)
         case _             => Never
       }

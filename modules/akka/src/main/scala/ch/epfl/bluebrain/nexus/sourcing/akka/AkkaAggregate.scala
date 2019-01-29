@@ -39,7 +39,7 @@ import scala.reflect.ClassTag
 class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] private[akka] (
     override val name: String,
     selection: ActorRefSelection[F],
-    retry: Retry[F],
+    retry: Retry[F, Throwable],
     config: AkkaSourcingConfig,
 )(implicit as: ActorSystem, mat: ActorMaterializer)
     extends Aggregate[F, String, Event, State, Command, Rejection] {
@@ -74,7 +74,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
       val future = IO(ref ? msg)
       val fa     = IO.fromFuture(future).to[F]
       fa.flatMap[A] {
-          case Reply(r)                         => F.pure(f(r))
+          case Reply(value)                     => F.pure(f(value))
           case te: TypeError                    => F.raiseError(te)
           case um: UnexpectedMsgId              => F.raiseError(um)
           case cet: CommandEvaluationTimeout[_] => F.raiseError(cet)
@@ -129,7 +129,7 @@ final class AggregateTree[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int,
   )(implicit
@@ -172,7 +172,7 @@ final class AggregateSharded[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
@@ -234,7 +234,7 @@ object AkkaAggregate {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int,
   )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
@@ -290,7 +290,7 @@ object AkkaAggregate {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None

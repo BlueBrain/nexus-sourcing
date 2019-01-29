@@ -12,7 +12,7 @@ import scala.concurrent.duration._
   *
   * @tparam F the type of the effect
   */
-trait Retryer[F[_]] {
+trait Retry[F[_]] {
 
   /**
     * Returns a new value in the same context type, but with a preconfigured retry mechanism.
@@ -25,7 +25,7 @@ trait Retryer[F[_]] {
 
 }
 
-object Retryer {
+object Retry {
 
   /**
     * Lifts a polymorphic function into a RetryStrategy.
@@ -33,17 +33,17 @@ object Retryer {
     * @param f the polymorphic function to lift into a RetryStrategy.
     * @see [[cats.arrow.FunctionK.lift]]
     */
-  def apply[F[_]](f: FunctionK[F, F]): Retryer[F] = new Retryer[F] {
+  def apply[F[_]](f: FunctionK[F, F]): Retry[F] = new Retry[F] {
     override def apply[A](fa: F[A]): F[A] = f(fa)
   }
 
   /**
-    * Constructs a [[Retryer]] from a given strategy
+    * Constructs a [[Retry]] from a given strategy
     *
     * @param strategy the strategy to retry
     */
-  def apply[F[_], E](strategy: RetryStrategy)(implicit F: MonadError[F, E], T: Timer[F]): Retryer[F] =
-    new Retryer[F] {
+  def apply[F[_], E](strategy: RetryStrategy)(implicit F: MonadError[F, E], T: Timer[F]): Retry[F] =
+    new Retry[F] {
 
       override def apply[A](fa: F[A]) = {
         def inner(previousDelay: FiniteDuration, currentRetries: Int): F[A] =
@@ -59,7 +59,7 @@ object Retryer {
     }
 }
 
-abstract class RetryerMap[F[_], E] extends Retryer[F] {
+abstract class RetryMap[F[_], E] extends Retry[F] {
 
   /**
     * Returns a new value computed from the ''pf''. Retries with a preconfigured retry mechanism
@@ -73,17 +73,17 @@ abstract class RetryerMap[F[_], E] extends Retryer[F] {
     */
   def apply[A, B](fa: F[A], pf: PartialFunction[A, B], onMapFailure: => E): F[B]
 }
-object RetryerMap {
+object RetryMap {
 
   /**
-    * Constructs a [[RetryerMap]] from a given strategy
+    * Constructs a [[RetryMap]] from a given strategy
     *
     * @param strategy the strategy to retry
     */
-  def apply[F[_], E](strategy: RetryStrategy)(implicit F: MonadError[F, E], T: Timer[F]): RetryerMap[F, E] =
-    new RetryerMap[F, E] {
+  def apply[F[_], E](strategy: RetryStrategy)(implicit F: MonadError[F, E], T: Timer[F]): RetryMap[F, E] =
+    new RetryMap[F, E] {
 
-      private val underlying = Retryer[F, E](strategy)
+      private val underlying = Retry[F, E](strategy)
 
       override def apply[A](fa: F[A]) = underlying.apply(fa)
 

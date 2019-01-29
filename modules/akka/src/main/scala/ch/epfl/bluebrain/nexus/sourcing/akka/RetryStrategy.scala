@@ -1,91 +1,92 @@
 package ch.epfl.bluebrain.nexus.sourcing.akka
 
-import cats.ApplicativeError
-import cats.arrow.FunctionK
-import cats.effect.Timer
-import cats.implicits._
+import com.github.ghik.silencer.silent
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
+import scala.util.Random
 
 /**
-  * A strategy to be applied for retrying computations of values in a <strong>lazy</strong> __F__ effect type.
-  *
-  * @tparam F the type of the effect
+  * Enumeration of retry strategy types.
   */
-trait RetryStrategy[F[_]] {
+sealed trait RetryStrategy extends Product with Serializable {
 
   /**
-    * Returns a new value in the same context type, but with a preconfigured retry mechanism.
+    * Given a current delay value provides the next delay.
     *
-    * @param fa the computation value in __F__
-    * @tparam A the type of the value
-    * @return a new value in the same context type, but with a preconfigured retry mechanism
+    * @param current the current delay
+    * @param retries the current amount of retries
     */
-  def apply[A](fa: F[A]): F[A]
-
+  def next(current: FiniteDuration, retries: Int): Option[FiniteDuration]
 }
 
 object RetryStrategy {
 
   /**
-    * Lifts a polymorphic function into a RetryStrategy.
+    * An exponential backoff delay increment strategy.
     *
-    * @param f the polymorphic function to lift into a RetryStrategy.
-    * @see [[cats.arrow.FunctionK.lift]]
+    * @param initialDelay the initial delay
+    * @param maxDelay     the maximum delay accepted
+    * @param randomFactor the random variation on delay
+    * @param maxRetries   the maximum number of retries
     */
-  def apply[F[_]](f: FunctionK[F, F]): RetryStrategy[F] = new RetryStrategy[F] {
-    override def apply[A](fa: F[A]): F[A] = f(fa)
-  }
-
-  /**
-    * No retry strategy.
-    */
-  def never[F[_]]: RetryStrategy[F] = new RetryStrategy[F] {
-    override def apply[A](fa: F[A]): F[A] = fa
-  }
-
-  /**
-    * A strategy that retries the computation once.
-    *
-    * @param F  evidence that __F__ has an [[ApplicativeError]]
-    * @tparam F the effect type
-    * @tparam E the error type
-    * @return a strategy that retries the computation once
-    */
-  def once[F[_], E](implicit F: ApplicativeError[F, E]): RetryStrategy[F] = new RetryStrategy[F] {
-    override def apply[A](fa: F[A]): F[A] =
-      fa.handleErrorWith { _ =>
-        fa
-      }
-  }
-
-  /**
-    * A retry strategy with exponential backoff.
-    *
-    * @param initialDelay the initial delay to apply before retrying the computation
-    * @param maxRetries   the maximum number of tries
-    * @param factor       the delay increase factor in between retries
-    * @param T            a timer for __F__
-    * @param F            an applicative error for __F__
-    * @tparam F           the effect type
-    * @tparam E           the error type
-    * @return a retry strategy with exponential backoff
-    */
-  def exponentialBackoff[F[_], E](
+  final case class Backoff(
       initialDelay: FiniteDuration,
-      maxRetries: Int,
-      factor: Int = 2
-  )(implicit T: Timer[F], F: ApplicativeError[F, E]): RetryStrategy[F] =
-    new RetryStrategy[F] {
-      def retry[A](fa: F[A], delay: FiniteDuration, retries: Int): F[A] =
-        fa.handleErrorWith { error =>
-          if (retries > 0)
-            T.sleep(delay) *> retry(fa, delay * factor.toLong, retries - 1)
-          else
-            F.raiseError(error)
-        }
-
-      override def apply[A](fa: F[A]): F[A] =
-        retry(fa, initialDelay, maxRetries)
+      maxDelay: FiniteDuration,
+      randomFactor: Double,
+      maxRetries: Int = Int.MaxValue,
+  ) extends RetryStrategy {
+    override def next(current: FiniteDuration, retries: Int): Option[FiniteDuration] = {
+      if (retries == 0) Some(initialDelay)
+      else if (retries >= maxRetries) None
+      else {
+        val cappedRandomFactor = randomFactor.min(1.0).max(0.0)
+        val minJitter          = 1 - cappedRandomFactor
+        val maxJitter          = 1 + cappedRandomFactor
+        val nextDelay          = 2 * (minJitter + (maxJitter - minJitter) * Random.nextDouble) * current.max(1 millis)
+        Some(nextDelay.min(maxDelay).toMillis millis)
+      }
     }
+  }
+
+  /**
+    * A linear delay increment strategy.
+    *
+    * @param initialDelay the initial delay
+    * @param maxDelay     the maximum delay accepted
+    * @param increment    the linear increment on delay
+    * @param maxRetries   the maximum number of retries
+    */
+  final case class Linear(
+      initialDelay: FiniteDuration,
+      maxDelay: FiniteDuration,
+      increment: FiniteDuration = 1 second,
+      maxRetries: Int = Int.MaxValue,
+  ) extends RetryStrategy {
+
+    override def next(current: FiniteDuration, retries: Int): Option[FiniteDuration] = {
+      if (retries == 0) Some(initialDelay)
+      else if (retries >= maxRetries) None
+      else Some((current + increment).min(maxDelay))
+    }
+  }
+
+  /**
+    * A once delay increment strategy.
+    *
+    * @param delay the duration to sleep before attempting again
+    */
+  final case class Once(delay: FiniteDuration = 0 millis) extends RetryStrategy {
+
+    override def next(current: FiniteDuration, retries: Int): Option[FiniteDuration] =
+      if (retries == 0) Some(delay)
+      else None
+  }
+
+  /**
+    * A never strategy.
+    */
+  final case object Never extends RetryStrategy {
+    @silent
+    override def next(current: FiniteDuration, retries: Int): Option[FiniteDuration] = None
+  }
 }

@@ -15,6 +15,7 @@ import cats.effect.{Async, Effect, IO}
 import cats.syntax.all._
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
+import ch.epfl.bluebrain.nexus.sourcing.akka.syntax._
 
 import scala.reflect.ClassTag
 
@@ -22,28 +23,29 @@ import scala.reflect.ClassTag
   * Akka aggregate implementation that makes use of persistent actors to perform its functions. It assumes the actors
   * already exist and are externally managed.
   *
-  * @param name          name of the aggregate (aggregates with the same name are part of the same group or share the
-  *                      same "type")
-  * @param selection     an actor selection strategy for a name and an identifier
-  * @param retryStrategy a strategy for retrying operations that fail unexpectedly
-  * @param config        the sourcing configuration
-  * @param as            the actor system used to run the actors
-  * @param mat           a materializer for running persistence queries
-  * @tparam F[_]       the aggregate log effect type
-  * @tparam Event      the event type
-  * @tparam State      the state type
-  * @tparam Command    the command type
-  * @tparam Rejection  the rejection type
+  * @param name      name of the aggregate (aggregates with the same name are part of the same group or share the
+  *                  same "type")
+  * @param selection an actor selection strategy for a name and an identifier
+  * @param retry     a strategy for retrying operations that fail unexpectedly
+  * @param config    the sourcing configuration
+  * @param as        the actor system used to run the actors
+  * @param mat       a materializer for running persistence queries
+  * @tparam F         [_]       the aggregate log effect type
+  * @tparam Event     the event type
+  * @tparam State     the state type
+  * @tparam Command   the command type
+  * @tparam Rejection the rejection type
   */
 class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] private[akka] (
     override val name: String,
     selection: ActorRefSelection[F],
-    retryStrategy: RetryStrategy[F],
+    retry: Retry[F, Throwable],
     config: AkkaSourcingConfig,
 )(implicit as: ActorSystem, mat: ActorMaterializer)
     extends Aggregate[F, String, Event, State, Command, Rejection] {
 
   private implicit val timeout: Timeout = config.askTimeout
+  private implicit val r                = retry
 
   private val Event = implicitly[ClassTag[Event]]
   private val F     = implicitly[Async[F]]
@@ -71,15 +73,15 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
     selection(name, id).flatMap { ref =>
       val future = IO(ref ? msg)
       val fa     = IO.fromFuture(future).to[F]
-      val mappedFA = fa.flatMap[A] {
-        case Reply(r)                         => F.pure(f(r))
-        case te: TypeError                    => F.raiseError(te)
-        case um: UnexpectedMsgId              => F.raiseError(um)
-        case cet: CommandEvaluationTimeout[_] => F.raiseError(cet)
-        case cee: CommandEvaluationError[_]   => F.raiseError(cee)
-        case other                            => F.raiseError(TypeError(id, Reply.runtimeClass.getSimpleName, other))
-      }
-      retryStrategy(mappedFA)
+      fa.flatMap[A] {
+          case Reply(value)                     => F.pure(f(value))
+          case te: TypeError                    => F.raiseError(te)
+          case um: UnexpectedMsgId              => F.raiseError(um)
+          case cet: CommandEvaluationTimeout[_] => F.raiseError(cet)
+          case cee: CommandEvaluationError[_]   => F.raiseError(cee)
+          case other                            => F.raiseError(TypeError(id, Reply.runtimeClass.getSimpleName, other))
+        }
+        .retry
     }
 
   override def foldLeft[B](id: String, z: B)(f: (B, Event) => B): F[B] = {
@@ -91,8 +93,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
           case _         => acc
         }
       }
-    val fr = IO.fromFuture(IO(future)).to[F]
-    retryStrategy(fr)
+    IO.fromFuture(IO(future)).to[F].retry
   }
 }
 
@@ -109,17 +110,17 @@ final class AggregateTree[F[_]] {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retryStrategy       strategy that defines how command evaluations and internal messaging should be retried
+    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
     *                            in case of failures
     * @param config              the sourcing configuration
     * @param poolSize            the size of the consistent hashing pool of persistent actor supervisors
     * @param F                   the aggregate effect type
     * @param as                  the underlying actor system
     * @param mat                 an actor materializer for replaying event streams
-    * @tparam Event              the aggregate event type
-    * @tparam State              the aggregate state type
-    * @tparam Command            the aggregate command type
-    * @tparam Rejection          the aggregate rejection type
+    * @tparam Event     the aggregate event type
+    * @tparam State     the aggregate state type
+    * @tparam Command   the aggregate command type
+    * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
   def apply[Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
@@ -128,14 +129,14 @@ final class AggregateTree[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retryStrategy: RetryStrategy[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int,
   )(implicit
     F: Effect[F],
     as: ActorSystem,
     mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] =
-    AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, retryStrategy, config, poolSize)
+    AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, retry, config, poolSize)
 }
 
 final class AggregateSharded[F[_]] {
@@ -151,7 +152,7 @@ final class AggregateSharded[F[_]] {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retryStrategy       strategy that defines how command evaluations and internal messaging should be retried
+    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
     *                            in case of failures
     * @param config              the sourcing configuration
     * @param shards              the number of shards to distribute across the cluster
@@ -159,10 +160,10 @@ final class AggregateSharded[F[_]] {
     * @param F                   the aggregate effect type
     * @param as                  the underlying actor system
     * @param mat                 an actor materializer for replaying event streams
-    * @tparam Event              the aggregate event type
-    * @tparam State              the aggregate state type
-    * @tparam Command            the aggregate command type
-    * @tparam Rejection          the aggregate rejection type
+    * @tparam Event     the aggregate event type
+    * @tparam State     the aggregate state type
+    * @tparam Command   the aggregate command type
+    * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
   def apply[Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
@@ -171,7 +172,7 @@ final class AggregateSharded[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retryStrategy: RetryStrategy[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
@@ -184,7 +185,7 @@ final class AggregateSharded[F[_]] {
                            next,
                            evaluate,
                            passivationStrategy,
-                           retryStrategy,
+                           retry,
                            config,
                            shards,
                            shardingSettings)
@@ -214,17 +215,17 @@ object AkkaAggregate {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retryStrategy       strategy that defines how command evaluations and internal messaging should be retried
+    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
     *                            in case of failures
     * @param config              the sourcing configuration
     * @param poolSize            the size of the consistent hashing pool of persistent actor supervisors
     * @param as                  the underlying actor system
     * @param mat                 an actor materializer for replaying event streams
-    * @tparam F                  the aggregate effect type
-    * @tparam Event              the aggregate event type
-    * @tparam State              the aggregate state type
-    * @tparam Command            the aggregate command type
-    * @tparam Rejection          the aggregate rejection type
+    * @tparam F         the aggregate effect type
+    * @tparam Event     the aggregate event type
+    * @tparam State     the aggregate state type
+    * @tparam Command   the aggregate command type
+    * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
   def treeF[F[_]: Effect, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
@@ -233,7 +234,7 @@ object AkkaAggregate {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retryStrategy: RetryStrategy[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int,
   )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
@@ -243,7 +244,7 @@ object AkkaAggregate {
       val parent = as.actorOf(ConsistentHashingPool(poolSize).props(props), name)
       // route all messages through the parent pool
       val selection = ActorRefSelection.const(parent)
-      new AkkaAggregate(name, selection, retryStrategy, config)
+      new AkkaAggregate(name, selection, retry, config)
     }
   }
 
@@ -269,18 +270,18 @@ object AkkaAggregate {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retryStrategy       strategy that defines how command evaluations and internal messaging should be retried
+    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
     *                            in case of failures
     * @param config              the sourcing configuration
     * @param shards              the number of shards to distribute across the cluster
     * @param shardingSettings    the sharding configuration
     * @param as                  the underlying actor system
     * @param mat                 an actor materializer for replaying event streams
-    * @tparam F                  the aggregate effect type
-    * @tparam Event              the aggregate event type
-    * @tparam State              the aggregate state type
-    * @tparam Command            the aggregate command type
-    * @tparam Rejection          the aggregate rejection type
+    * @tparam F         the aggregate effect type
+    * @tparam Event     the aggregate event type
+    * @tparam State     the aggregate state type
+    * @tparam Command   the aggregate command type
+    * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
   def shardedF[F[_]: Effect, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
@@ -289,7 +290,7 @@ object AkkaAggregate {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retryStrategy: RetryStrategy[F],
+      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
@@ -307,7 +308,7 @@ object AkkaAggregate {
       val ref   = ClusterSharding(as).start(name, props, settings, entityExtractor, shardExtractor)
       // route all messages through the sharding coordination
       val selection = ActorRefSelection.const(ref)
-      new AkkaAggregate(name, selection, retryStrategy, config)
+      new AkkaAggregate(name, selection, retry, config)
     }
   }
 

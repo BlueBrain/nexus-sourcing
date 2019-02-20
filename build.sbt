@@ -63,11 +63,11 @@ lazy val monixEval                = "io.monix"              %% "monix-eval"     
 lazy val scalaTest                = "org.scalatest"         %% "scalatest"                           % scalaTestVersion
 lazy val pureconfig               = "com.github.pureconfig" %% "pureconfig"                          % pureconfigVersion
 
-lazy val sourcing = project
-  .in(file("modules/sourcing"))
+lazy val core = project
+  .in(file("modules/core"))
   .settings(
-    name       := "sourcing",
-    moduleName := "sourcing",
+    name       := "sourcing-core",
+    moduleName := "sourcing-cre",
     libraryDependencies ++= Seq(
       akkaClusterSharding,
       akkaPersistence,
@@ -83,12 +83,12 @@ lazy val sourcing = project
     )
   )
 
-lazy val indexing = project
-  .in(file("modules/indexing"))
-  .dependsOn(sourcing)
+lazy val stream = project
+  .in(file("modules/stream"))
+  .dependsOn(core)
   .settings(
-    name       := "indexing",
-    moduleName := "indexing",
+    name       := "sourcing-stream",
+    moduleName := "sourcing-stream",
     libraryDependencies ++= Seq(
       akkaActor,
       akkaCluster,
@@ -116,7 +116,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(sourcing, indexing)
+  .aggregate(core, stream)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

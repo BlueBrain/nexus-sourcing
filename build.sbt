@@ -67,7 +67,7 @@ lazy val core = project
   .in(file("modules/core"))
   .settings(
     name       := "sourcing-core",
-    moduleName := "sourcing-cre",
+    moduleName := "sourcing-core",
     libraryDependencies ++= Seq(
       akkaClusterSharding,
       akkaPersistence,

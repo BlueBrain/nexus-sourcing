@@ -25,50 +25,55 @@ scalafmt: {
  */
 
 // Dependency versions
-val catsVersion                 = "1.6.0"
-val catsEffectVersion           = "1.2.0"
-val akkaVersion                 = "2.5.21"
-val akkaPersistenceInMemVersion = "2.5.1.1"
-val logbackVersion              = "1.2.3"
-val shapelessVersion            = "2.3.3"
-val scalaTestVersion            = "3.0.5"
-val pureconfigVersion           = "0.10.1"
+val akkaVersion                     = "2.5.21"
+val akkaHttpVersion                 = "10.1.7"
+val akkaPersistenceCassandraVersion = "0.92"
+val akkaPersistenceInMemVersion     = "2.5.1.1"
+val catsVersion                     = "1.6.0"
+val catsEffectVersion               = "1.2.0"
+val circeVersion                    = "0.11.1"
+val journalVersion                  = "3.0.19"
+val logbackVersion                  = "1.2.3"
+val monixVersion                    = "3.0.0-RC2"
+val shapelessVersion                = "2.3.3"
+val scalaTestVersion                = "3.0.5"
+val pureconfigVersion               = "0.10.2"
 
 // Dependency modules
-lazy val catsCore             = "org.typelevel"         %% "cats-core"                 % catsVersion
-lazy val catsEffect           = "org.typelevel"         %% "cats-effect"               % catsEffectVersion
-lazy val shapeless            = "com.chuusai"           %% "shapeless"                 % shapelessVersion
-lazy val akkaPersistence      = "com.typesafe.akka"     %% "akka-persistence"          % akkaVersion
-lazy val akkaPersistenceQuery = "com.typesafe.akka"     %% "akka-persistence-query"    % akkaVersion
-lazy val akkaClusterSharding  = "com.typesafe.akka"     %% "akka-cluster-sharding"     % akkaVersion
-lazy val akkaDistributedData  = "com.typesafe.akka"     %% "akka-distributed-data"     % akkaVersion
-lazy val akkaPersistenceInMem = "com.github.dnvriend"   %% "akka-persistence-inmemory" % akkaPersistenceInMemVersion
-lazy val akkaTestKit          = "com.typesafe.akka"     %% "akka-testkit"              % akkaVersion
-lazy val akkaSlf4j            = "com.typesafe.akka"     %% "akka-slf4j"                % akkaVersion
-lazy val scalaTest            = "org.scalatest"         %% "scalatest"                 % scalaTestVersion
-lazy val logback              = "ch.qos.logback"        % "logback-classic"            % logbackVersion
-lazy val pureconfig           = "com.github.pureconfig" %% "pureconfig"                % pureconfigVersion
+lazy val catsCore                 = "org.typelevel"         %% "cats-core"                           % catsVersion
+lazy val catsEffect               = "org.typelevel"         %% "cats-effect"                         % catsEffectVersion
+lazy val shapeless                = "com.chuusai"           %% "shapeless"                           % shapelessVersion
+lazy val akkaActor                = "com.typesafe.akka"     %% "akka-actor"                          % akkaVersion
+lazy val akkaCluster              = "com.typesafe.akka"     %% "akka-cluster"                        % akkaVersion
+lazy val akkaClusterSharding      = "com.typesafe.akka"     %% "akka-cluster-sharding"               % akkaVersion
+lazy val akkaHttpTestKit          = "com.typesafe.akka"     %% "akka-http-testkit"                   % akkaHttpVersion
+lazy val akkaPersistence          = "com.typesafe.akka"     %% "akka-persistence"                    % akkaVersion
+lazy val akkaPersistenceCassandra = "com.typesafe.akka"     %% "akka-persistence-cassandra"          % akkaPersistenceCassandraVersion
+lazy val akkaPersistenceLauncher  = "com.typesafe.akka"     %% "akka-persistence-cassandra-launcher" % akkaPersistenceCassandraVersion
+lazy val akkaPersistenceQuery     = "com.typesafe.akka"     %% "akka-persistence-query"              % akkaVersion
+lazy val akkaPersistenceInMem     = "com.github.dnvriend"   %% "akka-persistence-inmemory"           % akkaPersistenceInMemVersion
+lazy val akkaTestKit              = "com.typesafe.akka"     %% "akka-testkit"                        % akkaVersion
+lazy val akkaSlf4j                = "com.typesafe.akka"     %% "akka-slf4j"                          % akkaVersion
+lazy val circeCore                = "io.circe"              %% "circe-core"                          % circeVersion
+lazy val circeParser              = "io.circe"              %% "circe-parser"                        % circeVersion
+lazy val circeGenericExtras       = "io.circe"              %% "circe-generic-extras"                % circeVersion
+lazy val journal                  = "io.verizon.journal"    %% "core"                                % journalVersion
+lazy val logback                  = "ch.qos.logback"        % "logback-classic"                      % logbackVersion
+lazy val monixEval                = "io.monix"              %% "monix-eval"                          % monixVersion
+lazy val scalaTest                = "org.scalatest"         %% "scalatest"                           % scalaTestVersion
+lazy val pureconfig               = "com.github.pureconfig" %% "pureconfig"                          % pureconfigVersion
 
 lazy val core = project
   .in(file("modules/core"))
   .settings(
-    name                := "sourcing-core",
-    moduleName          := "sourcing-core",
-    libraryDependencies ++= Seq(catsCore, catsEffect, scalaTest % Test)
-  )
-
-lazy val akka = project
-  .in(file("modules/akka"))
-  .settings(
-    name       := "sourcing-akka",
-    moduleName := "sourcing-akka",
+    name       := "sourcing-core",
+    moduleName := "sourcing-core",
     libraryDependencies ++= Seq(
       akkaClusterSharding,
       akkaPersistence,
       akkaPersistenceQuery,
       catsCore,
       catsEffect,
-      akkaDistributedData  % Test,
       akkaPersistenceInMem % Test,
       akkaSlf4j            % Test,
       akkaTestKit          % Test,
@@ -77,7 +82,32 @@ lazy val akka = project
       pureconfig           % Test
     )
   )
-  .dependsOn(core % "compile->compile;test->test")
+
+lazy val stream = project
+  .in(file("modules/stream"))
+  .dependsOn(core)
+  .settings(
+    name       := "sourcing-stream",
+    moduleName := "sourcing-stream",
+    libraryDependencies ++= Seq(
+      akkaActor,
+      akkaCluster,
+      akkaPersistenceCassandra,
+      circeCore,
+      circeParser,
+      journal,
+      monixEval,
+      pureconfig,
+      shapeless,
+      akkaPersistenceLauncher % Test,
+      akkaTestKit             % Test,
+      akkaHttpTestKit         % Test,
+      akkaSlf4j               % Test,
+      circeGenericExtras      % Test,
+      pureconfig              % Test,
+      scalaTest               % Test,
+    )
+  )
 
 lazy val root = project
   .in(file("."))
@@ -86,7 +116,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(core, akka)
+  .aggregate(core, stream)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

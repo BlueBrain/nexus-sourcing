@@ -19,20 +19,22 @@ import scala.concurrent.duration._
 /**
   * Configuration to instrument a [[SequentialTagIndexer]] using am index function.
   *
-  * @param tag      the tag to use while selecting the events from the store
-  * @param pluginId the persistence query plugin id
-  * @param name     the name of this indexer
-  * @param mapping  the mapping function from Event to MappedEvt
-  * @param index    the indexing function
-  * @param init     an initialization function that is run before the indexer is (re)started
-  * @param batch    the number of events to be grouped
-  * @param batchTo  the timeout for the grouping on batches.
-  *                 Batching will the amount of time ''batchTo'' to have ''batch'' number of events the retry strategy
-  * @param storage  the [[OffsetStorage]]
-  * @tparam Event     the event type
-  * @tparam MappedEvt the mapped event type
-  * @tparam Err       the error type
-  * @tparam O         the type of [[OffsetStorage]]
+  * @param tag                the tag to use while selecting the events from the store
+  * @param pluginId           the persistence query plugin id
+  * @param name               the name of this indexer
+  * @param mapping            the mapping function from Event to MappedEvt
+  * @param index              the indexing function
+  * @param mapInitialProgress a function used to map initial [[ProjectionProgress]]
+  * @param mapProgress        a function used to map [[ProjectionProgress]] after every batch
+  * @param init               an initialization function that is run before the indexer is (re)started
+  * @param batch              the number of events to be grouped
+  * @param batchTo            the timeout for the grouping on batches.
+  *         Batching will the amount of time ''batchTo'' to have ''batch'' number of events the retry strategy
+  * @param storage            the [[OffsetStorage]]
+  * @tparam Event             the event type
+  * @tparam MappedEvt         the mapped event type
+  * @tparam Err               the error type
+  * @tparam O                 the type of [[OffsetStorage]]
   */
 final case class IndexerConfig[F[_], Event, MappedEvt, Err, O <: OffsetStorage] private (
     tag: String,
@@ -40,6 +42,8 @@ final case class IndexerConfig[F[_], Event, MappedEvt, Err, O <: OffsetStorage] 
     name: String,
     mapping: Event => F[Option[MappedEvt]],
     index: List[MappedEvt] => F[Unit],
+    mapInitialProgress: ProjectionProgress => F[Unit],
+    mapProgress: ProjectionProgress => F[Unit],
     init: F[Unit],
     batch: Int,
     batchTo: FiniteDuration,
@@ -92,6 +96,8 @@ object IndexerConfig {
       name: Option[String] = None,
       mapping: Option[Event => F[Option[MappedEvt]]] = None,
       index: Option[List[MappedEvt] => F[Unit]] = None,
+      mapInitialProgress: Option[ProjectionProgress => F[Unit]] = None,
+      mapProgress: Option[ProjectionProgress => F[Unit]] = None,
       init: F[Unit],
       batch: Int = 1,
       batchTo: FiniteDuration = 50 millis,
@@ -109,7 +115,24 @@ object IndexerConfig {
               e5: Mapping =:= Ready): IndexerConfig[F, Event, MappedEvt, Err, O] =
       (tag, plugin, name, index, mapping) match {
         case (Some(t), Some(p), Some(n), Some(i), Some(m)) =>
-          IndexerConfig(t, p, n, m, i, init, batch, batchTo, Retry(strategy), storage)
+          IndexerConfig(
+            t,
+            p,
+            n,
+            m,
+            i,
+            mapInitialProgress.getOrElse { _: ProjectionProgress =>
+              F.unit
+            },
+            mapProgress.getOrElse { _: ProjectionProgress =>
+              F.unit
+            },
+            init,
+            batch,
+            batchTo,
+            Retry(strategy),
+            storage
+          )
         case _ => throw new RuntimeException("Unexpected: some of the required fields are not set")
       }
 

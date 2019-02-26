@@ -2,8 +2,9 @@ package ch.epfl.bluebrain.nexus.sourcing.persistence
 
 import java.util.UUID
 
-import _root_.akka.persistence.query.{NoOffset, Offset}
+import _root_.akka.persistence.query.Offset
 import _root_.akka.testkit.{TestKit, TestKitBase}
+import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
@@ -29,16 +30,16 @@ class ResumableProjectionSpec
   "A ResumableProjection" should {
     val id = UUID.randomUUID().toString
 
-    "store an offset" in {
-      ResumableProjection(id).storeLatestOffset(Offset.sequence(42)).runToFuture.futureValue
+    "store progress" in {
+      ResumableProjection(id).storeProgress(OffsetProgress(Offset.sequence(42), 42)).runToFuture.futureValue
     }
 
-    "retrieve stored offset" in {
-      ResumableProjection(id).fetchLatestOffset.runToFuture.futureValue shouldEqual Offset.sequence(42)
+    "retrieve stored progress" in {
+      ResumableProjection(id).fetchProgress.runToFuture.futureValue shouldEqual OffsetProgress(Offset.sequence(42), 42)
     }
 
-    "retrieve NoOffset for unknown projections" in {
-      ResumableProjection(UUID.randomUUID().toString).fetchLatestOffset.runToFuture.futureValue shouldEqual NoOffset
+    "retrieve NoProgress for unknown projections" in {
+      ResumableProjection(UUID.randomUUID().toString).fetchProgress.runToFuture.futureValue shouldEqual NoProgress
     }
   }
 

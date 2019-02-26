@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicLong
 import _root_.akka.Done
 import _root_.akka.actor.ActorRef
 import _root_.akka.cluster.Cluster
-import _root_.akka.persistence.query.Offset
 import _root_.akka.stream.ActorMaterializer
 import _root_.akka.testkit.{TestActorRef, TestKit, TestKitBase}
 import _root_.akka.util.Timeout
@@ -140,7 +139,7 @@ class SequentialTagIndexerSpec
         implicit val failuresLog: IndexFailuresLog[Task]   = IndexFailuresLog(indexConfig.name)
         implicit val projection: ResumableProjection[Task] = ResumableProjection(indexConfig.name)
 
-        val streamByTag: StreamByTag[Task, Offset] = new PersistentStreamByTag(indexConfig)
+        val streamByTag: StreamByTag[Task, ProjectionProgress] = new PersistentStreamByTag(indexConfig)
         TestActorRef(new StreamCoordinator(streamByTag.fetchInit, streamByTag.source))
       }
     }

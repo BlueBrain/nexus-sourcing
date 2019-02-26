@@ -1,7 +1,6 @@
 package ch.epfl.bluebrain.nexus.sourcing.persistence
 
 import _root_.akka.actor.{ActorRef, ActorSystem}
-import _root_.akka.persistence.query.Offset
 import cats.effect.Effect
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag.{PersistentStreamByTag, VolatileStreamByTag}
@@ -28,7 +27,7 @@ object SequentialTagIndexer {
     */
   final def start[F[_]: Effect, Event: Typeable, MappedEvt, Err](
       config: IndexerConfig[F, Event, MappedEvt, Err, Volatile])(implicit as: ActorSystem, sc: Scheduler): ActorRef = {
-    val streamByTag: StreamByTag[F, Offset] = new VolatileStreamByTag(config)
+    val streamByTag: StreamByTag[F, ProjectionProgress] = new VolatileStreamByTag(config)
     StreamCoordinator.start(streamByTag.fetchInit, streamByTag.source, config.name)
   }
 
@@ -43,7 +42,7 @@ object SequentialTagIndexer {
                                                                 projection: ResumableProjection[F],
                                                                 as: ActorSystem,
                                                                 sc: Scheduler): ActorRef = {
-    val streamByTag: StreamByTag[F, Offset] = new PersistentStreamByTag(config)
+    val streamByTag: StreamByTag[F, ProjectionProgress] = new PersistentStreamByTag(config)
     StreamCoordinator.start(streamByTag.fetchInit, streamByTag.source, config.name)
   }
 

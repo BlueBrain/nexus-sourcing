@@ -2,14 +2,19 @@ package ch.epfl.bluebrain.nexus.sourcing.persistence
 
 import java.util.UUID
 
-import _root_.akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
+import akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
 import io.circe._
+import io.circe.generic.extras.Configuration
+import io.circe.generic.extras.semiauto._
 import shapeless.Typeable
 
 /**
-  * Collection of implicitly available encoders and decoders for PersistenceQuery's [[akka.persistence.query.Offset]].
+  * Collection of implicitly available encoders and decoders for [[ProjectionProgress]].
   */
-trait OffsetCodec {
+trait ProjectionProgressCodec {
+
+  private implicit val config: Configuration = Configuration.default
+    .withDiscriminator("type")
 
   final implicit val noOffsetTypeable: Typeable[NoOffset.type] =
     new Typeable[NoOffset.type] {
@@ -54,14 +59,17 @@ trait OffsetCodec {
       case `sequence`      => cursor.as[Sequence]
       case `timeBasedUUID` => cursor.as[TimeBasedUUID]
       case `noOffset`      => cursor.as[NoOffset.type]
-      // $COVERAGE-OFF$
+//       $COVERAGE-OFF$
       case other => Left(DecodingFailure(s"Unknown discriminator value '$other'", cursor.history))
-      // $COVERAGE-ON$
+//       $COVERAGE-ON$
     }
   }
+
+  implicit val projectionProgressEncoder: Encoder[ProjectionProgress] = deriveEncoder[ProjectionProgress]
+  implicit val projectionProgressDecoder: Decoder[ProjectionProgress] = deriveDecoder[ProjectionProgress]
 
   private def encodeDiscriminated[A: Encoder: Typeable](a: A) =
     Encoder[A].apply(a).deepMerge(Json.obj("type" -> Json.fromString(Typeable[A].describe)))
 }
 
-object OffsetCodec extends OffsetCodec
+object ProjectionProgressCodec extends ProjectionProgressCodec

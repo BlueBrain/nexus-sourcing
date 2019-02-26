@@ -15,10 +15,11 @@ import scala.concurrent.duration._
 class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with WordSpecLike with Matchers {
 
   "A IndexerConfig" should {
-    val indexF: List[String] => Task[Unit]       = _ => Task.unit
-    val initF: Task[Unit]                        = Task.unit
-    val strategy: RetryStrategy                  = Linear(0 millis, 2000 hours)
-    val identity: String => Task[Option[String]] = (v: String) => Task.pure(Some(v))
+    val indexF: List[String] => Task[Unit]            = _ => Task.unit
+    val initF: Task[Unit]                             = Task.unit
+    val mapProgress: ProjectionProgress => Task[Unit] = _ => Task.unit
+    val strategy: RetryStrategy                       = Linear(0 millis, 2000 hours)
+    val identity: String => Task[Option[String]]      = (v: String) => Task.pure(Some(v))
 
     implicit def eqIndexerConfig[T <: OffsetStorage]: Equality[IndexerConfig[Task, String, String, Throwable, T]] =
       (a: IndexerConfig[Task, String, String, Throwable, T], b: Any) => {
@@ -29,7 +30,18 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
     "build a the configuration for index function with persistence" in {
       val storage = Persist(restart = false)
       val expected: IndexerConfig[Task, String, String, Throwable, Persist] =
-        IndexerConfig("t", "p", "n", identity, indexF, initF, 1, 50 millis, Retry(strategy), storage)
+        IndexerConfig("t",
+                      "p",
+                      "n",
+                      identity,
+                      indexF,
+                      mapProgress,
+                      mapProgress,
+                      initF,
+                      1,
+                      50 millis,
+                      Retry(strategy),
+                      storage)
       builder[Task]
         .name("n")
         .plugin("p")
@@ -43,7 +55,18 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
     "build a the configuration for index function without persistence" in {
       val st = Linear(10 millis, 1 hour)
       val expected: IndexerConfig[Task, String, String, Throwable, Volatile] =
-        IndexerConfig("t", "p", "n", identity, indexF, initF, 5, 100 millis, Retry(st), Volatile)
+        IndexerConfig("t",
+                      "p",
+                      "n",
+                      identity,
+                      indexF,
+                      mapProgress,
+                      mapProgress,
+                      initF,
+                      5,
+                      100 millis,
+                      Retry(st),
+                      Volatile)
       builder[Task]
         .name("n")
         .plugin("p")
@@ -61,7 +84,18 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
       val storage = Persist(restart = false)
       val st      = Backoff(100 millis, 10 hours, 0.5, 7)
       val expected: IndexerConfig[Task, String, String, Throwable, Persist] =
-        IndexerConfig("t", "p", "n", identity, indexF, initF, 10, 40 millis, Retry(st), storage)
+        IndexerConfig("t",
+                      "p",
+                      "n",
+                      identity,
+                      indexF,
+                      mapProgress,
+                      mapProgress,
+                      initF,
+                      10,
+                      40 millis,
+                      Retry(st),
+                      storage)
       fromConfig[Task]
         .name("n")
         .plugin("p")

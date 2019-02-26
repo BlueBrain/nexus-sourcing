@@ -30,6 +30,7 @@ val akkaHttpVersion                 = "10.1.7"
 val akkaPersistenceCassandraVersion = "0.92"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val catsVersion                     = "1.6.0"
+val commonsVersion                  = "0.11.0"
 val catsEffectVersion               = "1.2.0"
 val circeVersion                    = "0.11.1"
 val journalVersion                  = "3.0.19"
@@ -40,28 +41,29 @@ val scalaTestVersion                = "3.0.5"
 val pureconfigVersion               = "0.10.2"
 
 // Dependency modules
-lazy val catsCore                 = "org.typelevel"         %% "cats-core"                           % catsVersion
-lazy val catsEffect               = "org.typelevel"         %% "cats-effect"                         % catsEffectVersion
-lazy val shapeless                = "com.chuusai"           %% "shapeless"                           % shapelessVersion
-lazy val akkaActor                = "com.typesafe.akka"     %% "akka-actor"                          % akkaVersion
-lazy val akkaCluster              = "com.typesafe.akka"     %% "akka-cluster"                        % akkaVersion
-lazy val akkaClusterSharding      = "com.typesafe.akka"     %% "akka-cluster-sharding"               % akkaVersion
-lazy val akkaHttpTestKit          = "com.typesafe.akka"     %% "akka-http-testkit"                   % akkaHttpVersion
-lazy val akkaPersistence          = "com.typesafe.akka"     %% "akka-persistence"                    % akkaVersion
-lazy val akkaPersistenceCassandra = "com.typesafe.akka"     %% "akka-persistence-cassandra"          % akkaPersistenceCassandraVersion
-lazy val akkaPersistenceLauncher  = "com.typesafe.akka"     %% "akka-persistence-cassandra-launcher" % akkaPersistenceCassandraVersion
-lazy val akkaPersistenceQuery     = "com.typesafe.akka"     %% "akka-persistence-query"              % akkaVersion
-lazy val akkaPersistenceInMem     = "com.github.dnvriend"   %% "akka-persistence-inmemory"           % akkaPersistenceInMemVersion
-lazy val akkaTestKit              = "com.typesafe.akka"     %% "akka-testkit"                        % akkaVersion
-lazy val akkaSlf4j                = "com.typesafe.akka"     %% "akka-slf4j"                          % akkaVersion
-lazy val circeCore                = "io.circe"              %% "circe-core"                          % circeVersion
-lazy val circeParser              = "io.circe"              %% "circe-parser"                        % circeVersion
-lazy val circeGenericExtras       = "io.circe"              %% "circe-generic-extras"                % circeVersion
-lazy val journal                  = "io.verizon.journal"    %% "core"                                % journalVersion
-lazy val logback                  = "ch.qos.logback"        % "logback-classic"                      % logbackVersion
-lazy val monixEval                = "io.monix"              %% "monix-eval"                          % monixVersion
-lazy val scalaTest                = "org.scalatest"         %% "scalatest"                           % scalaTestVersion
-lazy val pureconfig               = "com.github.pureconfig" %% "pureconfig"                          % pureconfigVersion
+lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion
+lazy val catsEffect               = "org.typelevel"           %% "cats-effect"                         % catsEffectVersion
+lazy val shapeless                = "com.chuusai"             %% "shapeless"                           % shapelessVersion
+lazy val akkaActor                = "com.typesafe.akka"       %% "akka-actor"                          % akkaVersion
+lazy val akkaCluster              = "com.typesafe.akka"       %% "akka-cluster"                        % akkaVersion
+lazy val akkaClusterSharding      = "com.typesafe.akka"       %% "akka-cluster-sharding"               % akkaVersion
+lazy val akkaHttpTestKit          = "com.typesafe.akka"       %% "akka-http-testkit"                   % akkaHttpVersion
+lazy val akkaPersistence          = "com.typesafe.akka"       %% "akka-persistence"                    % akkaVersion
+lazy val akkaPersistenceCassandra = "com.typesafe.akka"       %% "akka-persistence-cassandra"          % akkaPersistenceCassandraVersion
+lazy val akkaPersistenceLauncher  = "com.typesafe.akka"       %% "akka-persistence-cassandra-launcher" % akkaPersistenceCassandraVersion
+lazy val akkaPersistenceQuery     = "com.typesafe.akka"       %% "akka-persistence-query"              % akkaVersion
+lazy val akkaPersistenceInMem     = "com.github.dnvriend"     %% "akka-persistence-inmemory"           % akkaPersistenceInMemVersion
+lazy val akkaTestKit              = "com.typesafe.akka"       %% "akka-testkit"                        % akkaVersion
+lazy val akkaSlf4j                = "com.typesafe.akka"       %% "akka-slf4j"                          % akkaVersion
+lazy val circeCore                = "io.circe"                %% "circe-core"                          % circeVersion
+lazy val circeParser              = "io.circe"                %% "circe-parser"                        % circeVersion
+lazy val circeGenericExtras       = "io.circe"                %% "circe-generic-extras"                % circeVersion
+lazy val journal                  = "io.verizon.journal"      %% "core"                                % journalVersion
+lazy val logback                  = "ch.qos.logback"          % "logback-classic"                      % logbackVersion
+lazy val monixEval                = "io.monix"                %% "monix-eval"                          % monixVersion
+lazy val scalaTest                = "org.scalatest"           %% "scalatest"                           % scalaTestVersion
+lazy val commonsTest              = "ch.epfl.bluebrain.nexus" %% "commons-test"                        % commonsVersion
+lazy val pureconfig               = "com.github.pureconfig"   %% "pureconfig"                          % pureconfigVersion
 
 lazy val core = project
   .in(file("modules/core"))
@@ -94,6 +96,7 @@ lazy val stream = project
       akkaCluster,
       akkaPersistenceCassandra,
       circeCore,
+      circeGenericExtras,
       circeParser,
       journal,
       monixEval,
@@ -103,7 +106,7 @@ lazy val stream = project
       akkaTestKit             % Test,
       akkaHttpTestKit         % Test,
       akkaSlf4j               % Test,
-      circeGenericExtras      % Test,
+      commonsTest             % Test,
       pureconfig              % Test,
       scalaTest               % Test,
     )

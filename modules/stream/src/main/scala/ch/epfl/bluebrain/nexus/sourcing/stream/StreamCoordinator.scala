@@ -15,6 +15,7 @@ import scala.concurrent.Future
 
 /**
   * Actor implementation that builds and manages a stream ([[RunnableGraph]]).
+  *
   * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
   * @param source an initialization function that produces a stream from an initial start value
   */
@@ -25,6 +26,7 @@ class StreamCoordinator[F[_], A: Typeable](init: F[A], source: A => Source[A, _]
   private val A                              = implicitly[Typeable[A]]
   private implicit val as: ActorSystem       = context.system
   private implicit val mt: ActorMaterializer = ActorMaterializer()
+  private var state: Option[A]               = None
 
   private def initialize(): Unit = {
     val logError: PartialFunction[Throwable, F[Unit]] = {
@@ -43,6 +45,10 @@ class StreamCoordinator[F[_], A: Typeable](init: F[A], source: A => Source[A, _]
   private def buildStream(a: A): RunnableGraph[(UniqueKillSwitch, Future[Done])] = {
     source(a)
       .viaMat(KillSwitches.single)(Keep.right)
+      .map { latest =>
+        state = Some(latest)
+        latest
+      }
       .toMat(Sink.ignore)(Keep.both)
   }
 
@@ -68,6 +74,8 @@ class StreamCoordinator[F[_], A: Typeable](init: F[A], source: A => Source[A, _]
       log.info("Received stop signal while waiting for a start value, stopping")
       context.stop(self)
     // $COVERAGE-ON$
+
+    case FetchLatestState => sender() ! LatestState(state)
   }
 
   private def running(killSwitch: UniqueKillSwitch): Receive = {
@@ -87,6 +95,7 @@ class StreamCoordinator[F[_], A: Typeable](init: F[A], source: A => Source[A, _]
       log.info("Received stop signal, stopping stream")
       killSwitch.shutdown()
       context.become(stopping)
+    case FetchLatestState => sender() ! LatestState(state)
   }
 
   private def stopping: Receive = {
@@ -98,12 +107,15 @@ class StreamCoordinator[F[_], A: Typeable](init: F[A], source: A => Source[A, _]
       log.error("Stream finished with an error", th)
       context.stop(self)
     // $COVERAGE-ON$
+    case FetchLatestState => sender() ! LatestState(state)
   }
 }
 
 object StreamCoordinator {
   private[sourcing] final case class Start(any: Any)
   final case object Stop
+  final case object FetchLatestState
+  final case class LatestState[A](state: Option[A])
 
   /**
     * Builds a [[Props]] for a [[StreamCoordinator]] with its configuration.

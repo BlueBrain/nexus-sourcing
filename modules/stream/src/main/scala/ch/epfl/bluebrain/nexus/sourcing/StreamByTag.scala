@@ -4,11 +4,11 @@ import _root_.akka.NotUsed
 import _root_.akka.actor.ActorSystem
 import _root_.akka.event.Logging
 import _root_.akka.persistence.query.scaladsl.EventsByTagQuery
-import _root_.akka.persistence.query.{EventEnvelope, NoOffset, Offset, PersistenceQuery}
+import _root_.akka.persistence.query.{EventEnvelope, PersistenceQuery}
 import _root_.akka.stream.scaladsl.Source
 import cats.effect.Effect
-import cats.implicits._
 import cats.effect.syntax.all._
+import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.persistence.OffsetStorage._
 import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress._
 import ch.epfl.bluebrain.nexus.sourcing.persistence._
@@ -70,54 +70,67 @@ object StreamByTag {
     private[sourcing] type IdentifiedEvent = (String, Event, MappedEvt)
 
     private[sourcing] def batchedSource(
-        initialProgress: ProjectionProgress): Source[(Offset, List[IdentifiedEvent]), NotUsed] = {
+        initialProgress: ProjectionProgress): Source[(ProjectionProgress, List[IdentifiedEvent]), NotUsed] = {
       config.mapInitialProgress(initialProgress).toIO.unsafeRunSync()
       PersistenceQuery(as)
         .readJournalFor[EventsByTagQuery](config.pluginId)
         .eventsByTag(config.tag, initialProgress.offset)
-        .flatMapConcat(castEvent)
+        .scan((initialProgress, None: Option[EventEnvelope])) { (previous, envelope) =>
+          previous match {
+            case (progress, _) => (OffsetProgress(envelope.offset, progress.processedCount + 1), Some(envelope))
+          }
+
+        }
+        .flatMapConcat {
+          case (progress, Some(envelope)) => castEvent(progress, envelope)
+          case (_, None)                  => Source.empty
+        }
         .mapAsync(1) { case (offset, id, event) => mapEvent(offset, id, event) }
-        .collect { case Some(value) => value }
         .groupedWithin(config.batch, config.batchTo)
         .filter(_.nonEmpty)
         .map(mapBatchOffset)
     }
 
-    private def castEvent(envelope: EventEnvelope): Source[(Offset, String, Event), NotUsed] = {
+    private def castEvent(progress: ProjectionProgress,
+                          envelope: EventEnvelope): Source[(ProjectionProgress, String, Event), NotUsed] = {
       log.debug("Processing event for persistence id '{}', seqNr '{}'", envelope.persistenceId, envelope.sequenceNr)
       T.cast(envelope.event) match {
-        case Some(casted) => Source.single((envelope.offset, envelope.persistenceId, casted))
+        case Some(casted) => Source.single((progress, envelope.persistenceId, casted))
         case _ =>
           log.warning("Some of the Events on the list are not compatible with type '{}', skipping...", T.describe)
           Source.empty
       }
     }
 
-    private def mapEvent(offset: Offset, id: String, event: Event): Future[Option[(Offset, String, Event, MappedEvt)]] =
+    private def mapEvent(offset: ProjectionProgress,
+                         id: String,
+                         event: Event): Future[(ProjectionProgress, String, Event, Option[MappedEvt])] =
       config
         .mapping(event)
         .retry
         .map {
-          case Some(evtMapped) => Some((offset, id, event, evtMapped))
+          case Some(evtMapped) => (offset, id, event, Some(evtMapped))
           case None =>
             log.warning("Indexing event with id '{}' and value '{}' failed '{}'", id, event, "Mapping failed")
-            None
+            (offset, id, event, None)
         }
-        .recoverWith(logError(id, event))
+        .recoverWith(logError(offset, id, event))
         .toIO
         .unsafeToFuture()
 
-    private def mapBatchOffset(
-        batched: Seq[(Offset, String, Event, MappedEvt)]): (Offset, List[(String, Event, MappedEvt)]) = {
-      val offset = batched.lastOption.map { case (off, _, _, _) => off }.getOrElse(NoOffset)
-      (offset, batched.map { case (_, id, event, mappedEvent) => (id, event, mappedEvent) }.toList)
+    private def mapBatchOffset(batched: Seq[(ProjectionProgress, String, Event, Option[MappedEvt])])
+      : (ProjectionProgress, List[(String, Event, MappedEvt)]) = {
+      val offset = batched.lastOption.map { case (off, _, _, _) => off }.getOrElse(NoProgress)
+      (offset, batched.collect { case (_, id, event, Some(mappedEvent)) => (id, event, mappedEvent) }.toList)
     }
 
-    private def logError(id: String,
-                         event: Event): PartialFunction[Throwable, F[Option[(Offset, String, Event, MappedEvt)]]] = {
+    private def logError(
+        offset: ProjectionProgress,
+        id: String,
+        event: Event): PartialFunction[Throwable, F[(ProjectionProgress, String, Event, Option[MappedEvt])]] = {
       case err =>
         log.error(err, "Indexing event with id '{}' and value '{}' failed '{}'", id, event, err.getMessage)
-        F.pure(None)
+        F.pure((offset, id, event, None))
     }
 
   }
@@ -147,34 +160,33 @@ object StreamByTag {
 
     def source(initialProgress: ProjectionProgress): Source[ProjectionProgress, NotUsed] =
       batchedSource(initialProgress)
-        .scanAsync(initialProgress) {
-          case (previousProgress, (offset, events)) => indexEvents(previousProgress, offset, events)
-        }
-        .mapAsync(1) { progress =>
-          config.mapProgress(progress).map(_ => progress).toIO.unsafeToFuture()
-        }
+    .mapAsync(1) {
+      case (offset, events) => indexEvents(offset, events)
+    }
+    .mapAsync(1) { progress =>
+      config.mapProgress(progress).map(_ => progress).toIO.unsafeToFuture()
+    }
         .mapAsync(1)(storeProgress)
 
-    private def indexEvents(previousProgress: ProjectionProgress,
-                            offset: Offset,
-                            events: List[IdentifiedEvent]): Future[ProjectionProgress] =
+    private def indexEvents(offset: ProjectionProgress, events: List[IdentifiedEvent]): Future[ProjectionProgress] =
       config
         .index(events.map { case (_, _, mapped) => mapped })
         .retry
         .recoverWith(recoverIndex(offset, events))
-        .map(_ => OffsetProgress(offset, previousProgress.processedCount + events.size))
+        .map(_ => offset)
         .toIO
         .unsafeToFuture()
 
     private def storeProgress(offset: ProjectionProgress): Future[ProjectionProgress] =
       projection.storeProgress(offset).retry.map(_ => offset).toIO.unsafeToFuture()
 
-    private def recoverIndex(offset: Offset, events: List[IdentifiedEvent]): PartialFunction[Throwable, F[Unit]] = {
+    private def recoverIndex(offset: ProjectionProgress,
+                             events: List[IdentifiedEvent]): PartialFunction[Throwable, F[Unit]] = {
       case err =>
         events.traverse {
           case (id, event, _) =>
             log.error(err, "Indexing event with id '{}' and value '{}' failed'{}'", id, event, err.getMessage)
-            failureLog.storeEvent(id, offset, event)
+            failureLog.storeEvent(id, offset.offset, event)
         } *> F.unit
     }
   }
@@ -197,21 +209,19 @@ object StreamByTag {
 
     def fetchInit: F[ProjectionProgress] = config.init.retry *> F.pure(NoProgress)
 
-    private def indexEvents(previousProgress: ProjectionProgress,
-                            offset: Offset,
-                            events: List[IdentifiedEvent]): Future[ProjectionProgress] =
+    private def indexEvents(offset: ProjectionProgress, events: List[IdentifiedEvent]): Future[ProjectionProgress] =
       config
         .index(events.map { case (_, _, mapped) => mapped })
         .retry
         .recoverWith(logError(events))
-        .map(_ => OffsetProgress(offset, previousProgress.processedCount + events.size))
+        .map(_ => offset)
         .toIO
         .unsafeToFuture()
 
     def source(initialProgress: ProjectionProgress): Source[ProjectionProgress, NotUsed] = {
       batchedSource(initialProgress)
-        .scanAsync(initialProgress) {
-          case (previousOffset, (offset, events)) => indexEvents(previousOffset, offset, events)
+        .mapAsync(1) {
+          case (offset, events) => indexEvents(offset, events)
         }
         .mapAsync(1) { progress =>
           config.mapProgress(progress).map(_ => progress).toIO.unsafeToFuture()

@@ -152,6 +152,14 @@ object IndexerConfig {
       : IndexConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Ready, Mapping, Err, O] =
       copy(index = Some(value))
 
+    def mapInitialProgress(value: ProjectionProgress => F[Unit])
+      : IndexConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
+      copy(mapInitialProgress = Some(value))
+
+    def mapProgress(value: ProjectionProgress => F[Unit])
+      : IndexConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
+      copy(mapProgress = Some(value))
+
     def mapping[TT, TTO](
         value: TT => F[Option[TTO]]): IndexConfigBuilder[F, TT, TTO, Tag, Plugin, Name, Index, Ready, Err, O] =
       copy(mapping = Some(value), index = None)

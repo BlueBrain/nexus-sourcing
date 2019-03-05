@@ -160,12 +160,12 @@ object StreamByTag {
 
     def source(initialProgress: ProjectionProgress): Source[ProjectionProgress, NotUsed] =
       batchedSource(initialProgress)
-    .mapAsync(1) {
-      case (offset, events) => indexEvents(offset, events)
-    }
-    .mapAsync(1) { progress =>
-      config.mapProgress(progress).map(_ => progress).toIO.unsafeToFuture()
-    }
+        .mapAsync(1) {
+          case (offset, events) => indexEvents(offset, events)
+        }
+        .mapAsync(1) { progress =>
+          config.mapProgress(progress).map(_ => progress).toIO.unsafeToFuture()
+        }
         .mapAsync(1)(storeProgress)
 
     private def indexEvents(offset: ProjectionProgress, events: List[IdentifiedEvent]): Future[ProjectionProgress] =

@@ -1,8 +1,9 @@
 {
-  "offset" : {
-    "type" : "TimeBasedUUID",
-    "value" : "ee7e4360-39ca-11e9-9ed5-dbdaa32f8986"
+  "offset": {
+    "type": "TimeBasedUUID",
+    "value": "ee7e4360-39ca-11e9-9ed5-dbdaa32f8986"
   },
-  "processedCount" : 32,
-  "type" : "OffsetProgress"
+  "processedCount": 32,
+  "discardedCount": 30,
+  "type": "OffsetProgress"
 }

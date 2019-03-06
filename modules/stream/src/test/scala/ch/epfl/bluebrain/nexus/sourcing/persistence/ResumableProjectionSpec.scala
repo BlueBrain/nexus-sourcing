@@ -31,11 +31,13 @@ class ResumableProjectionSpec
     val id = UUID.randomUUID().toString
 
     "store progress" in {
-      ResumableProjection(id).storeProgress(OffsetProgress(Offset.sequence(42), 42)).runToFuture.futureValue
+      ResumableProjection(id).storeProgress(OffsetProgress(Offset.sequence(42), 42, 42)).runToFuture.futureValue
     }
 
     "retrieve stored progress" in {
-      ResumableProjection(id).fetchProgress.runToFuture.futureValue shouldEqual OffsetProgress(Offset.sequence(42), 42)
+      ResumableProjection(id).fetchProgress.runToFuture.futureValue shouldEqual OffsetProgress(Offset.sequence(42),
+                                                                                               42,
+                                                                                               42)
     }
 
     "retrieve NoProgress for unknown projections" in {

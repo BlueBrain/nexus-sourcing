@@ -14,8 +14,8 @@ class ProjectionProgressCodecSpec extends WordSpecLike with Matchers with Inspec
 
   "A ProjectionProgress" should {
     val mapping = Map(
-      OffsetProgress(Sequence(14L), 1) -> jsonContentOf("/indexing/sequence-offset-progress.json"),
-      OffsetProgress(TimeBasedUUID(UUID.fromString("ee7e4360-39ca-11e9-9ed5-dbdaa32f8986")), 32) -> jsonContentOf(
+      OffsetProgress(Sequence(14L), 1, 0) -> jsonContentOf("/indexing/sequence-offset-progress.json"),
+      OffsetProgress(TimeBasedUUID(UUID.fromString("ee7e4360-39ca-11e9-9ed5-dbdaa32f8986")), 32, 30) -> jsonContentOf(
         "/indexing/timebaseduuid-offset-progress.json"),
       NoProgress -> jsonContentOf("/indexing/no-offset-progress.json")
     )

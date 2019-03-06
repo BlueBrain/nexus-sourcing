@@ -77,7 +77,8 @@ object StreamByTag {
         .eventsByTag(config.tag, initialProgress.offset)
         .scan((initialProgress, None: Option[EventEnvelope])) { (previous, envelope) =>
           previous match {
-            case (progress, _) => (OffsetProgress(envelope.offset, progress.processedCount + 1), Some(envelope))
+            case (progress, _) =>
+              (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount), Some(envelope))
           }
 
         }
@@ -85,52 +86,62 @@ object StreamByTag {
           case (progress, Some(envelope)) => castEvent(progress, envelope)
           case (_, None)                  => Source.empty
         }
-        .mapAsync(1) { case (offset, id, event) => mapEvent(offset, id, event) }
+        .mapAsync(1) {
+          case (offset, id, Some(event)) => mapEvent(offset, id, event)
+          case (offset, id, None)        => Future.successful((offset, id, None, None))
+        }
         .groupedWithin(config.batch, config.batchTo)
         .filter(_.nonEmpty)
         .map(mapBatchOffset)
     }
 
     private def castEvent(progress: ProjectionProgress,
-                          envelope: EventEnvelope): Source[(ProjectionProgress, String, Event), NotUsed] = {
+                          envelope: EventEnvelope): Source[(ProjectionProgress, String, Option[Event]), NotUsed] = {
       log.debug("Processing event for persistence id '{}', seqNr '{}'", envelope.persistenceId, envelope.sequenceNr)
       T.cast(envelope.event) match {
-        case Some(casted) => Source.single((progress, envelope.persistenceId, casted))
+        case Some(casted) => Source.single((progress, envelope.persistenceId, Some(casted)))
         case _ =>
           log.warning("Some of the Events on the list are not compatible with type '{}', skipping...", T.describe)
-          Source.empty
+          Source.single((progress, envelope.persistenceId, None))
       }
     }
 
     private def mapEvent(offset: ProjectionProgress,
                          id: String,
-                         event: Event): Future[(ProjectionProgress, String, Event, Option[MappedEvt])] =
+                         event: Event): Future[(ProjectionProgress, String, Option[Event], Option[MappedEvt])] =
       config
         .mapping(event)
         .retry
         .map {
-          case Some(evtMapped) => (offset, id, event, Some(evtMapped))
+          case Some(evtMapped) => (offset, id, Some(event): Option[Event], Some(evtMapped))
           case None =>
             log.warning("Indexing event with id '{}' and value '{}' failed '{}'", id, event, "Mapping failed")
-            (offset, id, event, None)
+            (offset, id, Some(event), None)
         }
         .recoverWith(logError(offset, id, event))
         .toIO
         .unsafeToFuture()
 
-    private def mapBatchOffset(batched: Seq[(ProjectionProgress, String, Event, Option[MappedEvt])])
+    private def mapBatchOffset(batched: Seq[(ProjectionProgress, String, Option[Event], Option[MappedEvt])])
       : (ProjectionProgress, List[(String, Event, MappedEvt)]) = {
       val offset = batched.lastOption.map { case (off, _, _, _) => off }.getOrElse(NoProgress)
-      (offset, batched.collect { case (_, id, event, Some(mappedEvent)) => (id, event, mappedEvent) }.toList)
+      val skipped = batched.count {
+        case (_, _, None, _) => true
+        case (_, _, _, None) => true
+        case _               => false
+      }
+      (OffsetProgress(offset.offset, offset.processedCount, offset.discardedCount + skipped), batched.collect {
+        case (_, id, Some(event), Some(mappedEvent)) => (id, event, mappedEvent)
+      }.toList)
     }
 
     private def logError(
         offset: ProjectionProgress,
         id: String,
-        event: Event): PartialFunction[Throwable, F[(ProjectionProgress, String, Event, Option[MappedEvt])]] = {
+        event: Event): PartialFunction[Throwable, F[(ProjectionProgress, String, Option[Event], Option[MappedEvt])]] = {
       case err =>
         log.error(err, "Indexing event with id '{}' and value '{}' failed '{}'", id, event, err.getMessage)
-        F.pure((offset, id, event, None))
+        F.pure((offset, id, Some(event), None))
     }
 
   }

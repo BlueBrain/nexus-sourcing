@@ -60,6 +60,7 @@ class StreamCoordinator[F[_], A: Typeable](init: F[A], source: A => Source[A, _]
             "Received initial start value of type '{}', with value '{}' running the indexing function across the element stream",
             A.describe,
             a)
+          state = Some(a)
           val (killSwitch, doneFuture) = buildStream(a).run()
           doneFuture pipeTo self
           context.become(running(killSwitch))

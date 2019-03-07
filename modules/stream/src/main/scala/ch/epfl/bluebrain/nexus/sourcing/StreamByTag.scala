@@ -75,73 +75,79 @@ object StreamByTag {
       PersistenceQuery(as)
         .readJournalFor[EventsByTagQuery](config.pluginId)
         .eventsByTag(config.tag, initialProgress.offset)
-        .scan((initialProgress, None: Option[EventEnvelope])) { (previous, envelope) =>
-          previous match {
-            case (progress, _) =>
-              (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount), Some(envelope))
-          }
-
+        .map(castEvent)
+        .mapAsync(1) {
+          case (id, Some(event)) => mapEvent(id, event)
+          case (id, None)        => Future.successful((id, None, None))
+        }
+        .scan((initialProgress, None: Option[String], None: Option[Event], None: Option[MappedEvt])) {
+          (previous, next) =>
+            val progress = previous._1
+            next match {
+              case (envelope, Some(event), Some(mappedEvt)) =>
+                (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount),
+                 Some(envelope.persistenceId),
+                 Some(event),
+                 Some(mappedEvt))
+              case (envelope, eventOpt, mappedOpt) =>
+                (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount + 1),
+                 Some(envelope.persistenceId),
+                 eventOpt,
+                 mappedOpt)
+            }
         }
         .flatMapConcat {
-          case (progress, Some(envelope)) => castEvent(progress, envelope)
-          case (_, None)                  => Source.empty
-        }
-        .mapAsync(1) {
-          case (offset, id, Some(event)) => mapEvent(offset, id, event)
-          case (offset, id, None)        => Future.successful((offset, id, None, None))
+          case (progress, Some(id), eventOpt, mappedOpt) => Source.single((progress, id, eventOpt, mappedOpt))
+          case (_, None, _, _)                           => Source.empty
         }
         .groupedWithin(config.batch, config.batchTo)
         .filter(_.nonEmpty)
         .map(mapBatchOffset)
     }
 
-    private def castEvent(progress: ProjectionProgress,
-                          envelope: EventEnvelope): Source[(ProjectionProgress, String, Option[Event]), NotUsed] = {
+    private def castEvent(envelope: EventEnvelope): (EventEnvelope, Option[Event]) = {
       log.debug("Processing event for persistence id '{}', seqNr '{}'", envelope.persistenceId, envelope.sequenceNr)
       T.cast(envelope.event) match {
-        case Some(casted) => Source.single((progress, envelope.persistenceId, Some(casted)))
+        case Some(casted) => (envelope, Some(casted))
         case _ =>
           log.warning("Some of the Events on the list are not compatible with type '{}', skipping...", T.describe)
-          Source.single((progress, envelope.persistenceId, None))
+          (envelope, None)
       }
     }
 
-    private def mapEvent(offset: ProjectionProgress,
-                         id: String,
-                         event: Event): Future[(ProjectionProgress, String, Option[Event], Option[MappedEvt])] =
+    private def mapEvent(env: EventEnvelope, event: Event): Future[(EventEnvelope, Option[Event], Option[MappedEvt])] =
       config
         .mapping(event)
         .retry
         .map {
-          case Some(evtMapped) => (offset, id, Some(event): Option[Event], Some(evtMapped))
+          case Some(evtMapped) => (env, Some(event): Option[Event], Some(evtMapped))
           case None =>
-            log.warning("Indexing event with id '{}' and value '{}' failed '{}'", id, event, "Mapping failed")
-            (offset, id, Some(event), None)
+            log.debug("Mapping event with id '{}' and value '{}' failed '{}'",
+                      env.persistenceId,
+                      event,
+                      "Mapping failed")
+            (env, Some(event), None)
         }
-        .recoverWith(logError(offset, id, event))
+        .recoverWith(logError(env, event))
         .toIO
         .unsafeToFuture()
 
     private def mapBatchOffset(batched: Seq[(ProjectionProgress, String, Option[Event], Option[MappedEvt])])
       : (ProjectionProgress, List[(String, Event, MappedEvt)]) = {
       val offset = batched.lastOption.map { case (off, _, _, _) => off }.getOrElse(NoProgress)
-      val skipped = batched.count {
-        case (_, _, None, _) => true
-        case (_, _, _, None) => true
-        case _               => false
-      }
-      (OffsetProgress(offset.offset, offset.processedCount, offset.discardedCount + skipped), batched.collect {
-        case (_, id, Some(event), Some(mappedEvent)) => (id, event, mappedEvent)
-      }.toList)
+      (offset, batched.collect { case (_, id, Some(event), Some(mappedEvent)) => (id, event, mappedEvent) }.toList)
     }
 
     private def logError(
-        offset: ProjectionProgress,
-        id: String,
-        event: Event): PartialFunction[Throwable, F[(ProjectionProgress, String, Option[Event], Option[MappedEvt])]] = {
+        env: EventEnvelope,
+        event: Event): PartialFunction[Throwable, F[(EventEnvelope, Option[Event], Option[MappedEvt])]] = {
       case err =>
-        log.error(err, "Indexing event with id '{}' and value '{}' failed '{}'", id, event, err.getMessage)
-        F.pure((offset, id, Some(event), None))
+        log.error(err,
+                  "Indexing event with id '{}' and value '{}' failed '{}'",
+                  env.persistenceId,
+                  event,
+                  err.getMessage)
+        F.pure((env, Some(event), None))
     }
 
   }

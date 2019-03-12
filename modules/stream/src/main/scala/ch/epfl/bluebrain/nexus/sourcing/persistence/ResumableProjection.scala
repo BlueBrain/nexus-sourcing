@@ -24,7 +24,7 @@ trait ResumableProjection[F[_]] {
   def identifier: String
 
   /**
-    * @return the latest known [[ProjectionProgress]]; an inexistent offset is represented by [[ProjectionProgress]]
+    * @return the latest known [[ProjectionProgress]]; an inexistent offset is represented by [[ProjectionProgress.NoProgress]]
     */
   def fetchProgress: F[ProjectionProgress]
 

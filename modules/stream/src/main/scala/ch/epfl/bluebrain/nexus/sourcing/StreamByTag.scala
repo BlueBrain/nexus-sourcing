@@ -81,24 +81,20 @@ object StreamByTag {
           case (id, None)        => Future.successful((id, None, None))
         }
         .scan((initialProgress, None: Option[String], None: Option[Event], None: Option[MappedEvt])) {
-          (previous, next) =>
-            val progress = previous._1
-            next match {
-              case (envelope, Some(event), Some(mappedEvt)) =>
-                (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount),
-                 Some(envelope.persistenceId),
-                 Some(event),
-                 Some(mappedEvt))
-              case (envelope, eventOpt, mappedOpt) =>
-                (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount + 1),
-                 Some(envelope.persistenceId),
-                 eventOpt,
-                 mappedOpt)
-            }
+          case ((progress, _, _, _), (envelope, Some(event), Some(mappedEvt))) =>
+            (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount),
+             Some(envelope.persistenceId),
+             Some(event),
+             Some(mappedEvt))
+          case ((progress, _, _, _), (envelope, eventOpt, mappedOpt)) =>
+            (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount + 1),
+             Some(envelope.persistenceId),
+             eventOpt,
+             mappedOpt)
         }
         .flatMapConcat {
           case (progress, Some(id), eventOpt, mappedOpt) => Source.single((progress, id, eventOpt, mappedOpt))
-          case (_, None, _, _)                           => Source.empty
+          case _                                         => Source.empty
         }
         .groupedWithin(config.batch, config.batchTo)
         .filter(_.nonEmpty)

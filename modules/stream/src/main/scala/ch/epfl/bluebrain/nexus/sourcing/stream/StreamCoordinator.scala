@@ -17,6 +17,7 @@ import monix.execution.Scheduler
 import shapeless.Typeable
 
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 /**
   * Stream coordinator that wraps the actor builds and manages a stream.
@@ -32,8 +33,8 @@ class StreamCoordinator[F[_], A](val actor: ActorRef)(implicit F: Effect[F], con
     *
     * @return latest state wrapped in [[F]]
     */
-  def state(): F[Option[A]] = IO.fromFuture(IO(actor ? FetchLatestState)).to[F].map {
-    case st: LatestState[A] => st.state
+  def state()(implicit A: ClassTag[Option[A]]): F[Option[A]] = IO.fromFuture(IO(actor ? FetchLatestState)).to[F].map {
+    case LatestState(A(state)) => state
   }
 
   /**

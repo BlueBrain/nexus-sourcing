@@ -39,7 +39,7 @@ final class CassandraIndexFailuresStorage[F[_]: LiftIO](session: CassandraSessio
     implicit F: Monad[F])
     extends IndexFailuresStorage[F]
     with Extension
-    with OffsetCodec {
+    with ProjectionProgressCodec {
 
   override def storeEvent[T](identifier: String, persistenceId: String, offset: Offset, event: T)(
       implicit E: Encoder[T]): F[Unit] = {

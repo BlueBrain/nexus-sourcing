@@ -13,6 +13,8 @@ object Fixture {
   final case object YetAnotherExecuted extends Event
   final case object RetryExecuted      extends Event
   final case object IgnoreExecuted     extends Event
+  final case object NotDiscarded       extends Event
+  final case object Discarded          extends Event
 
   sealed trait EventTransform
   final case object ExecutedTransform           extends EventTransform
@@ -21,6 +23,8 @@ object Fixture {
   final case object YetAnotherExecutedTransform extends EventTransform
   final case object RetryExecutedTransform      extends EventTransform
   final case object IgnoreExecutedTransform     extends EventTransform
+  final case object NotDiscardedTransform       extends EventTransform
+  final case object DiscardedTransform          extends EventTransform
 
   sealed trait Cmd
   final case object Execute           extends Cmd
@@ -45,6 +49,8 @@ object Fixture {
       case YetAnotherExecuted => Tagged(event, Set("yetanother"))
       case RetryExecuted      => Tagged(event, Set("retry"))
       case IgnoreExecuted     => Tagged(event, Set("ignore"))
+      case NotDiscarded       => Tagged(event, Set("discard"))
+      case Discarded          => Tagged(event, Set("discard"))
 
     }
   }

@@ -1,7 +1,6 @@
 package ch.epfl.bluebrain.nexus.sourcing.persistence
 
 import _root_.akka.actor.ActorSystem
-import _root_.akka.persistence.query.Offset
 import monix.eval.Task
 
 /**
@@ -13,7 +12,7 @@ import monix.eval.Task
   *
   *   implicit val as: ActorSystem = ActorSystem()
   *   val proj = ResumableProjection("default")
-  *   proj.fetchLatestOffset // Future[Offset]
+  *   proj.fetchProgress // Future[ProjectionProgress]
   *
   * }}}
   */
@@ -25,36 +24,36 @@ trait ResumableProjection[F[_]] {
   def identifier: String
 
   /**
-    * @return the latest known offset; an inexistent offset is represented by [[akka.persistence.query.NoOffset]]
+    * @return the latest known [[ProjectionProgress]]; an inexistent offset is represented by [[ProjectionProgress.NoProgress]]
     */
-  def fetchLatestOffset: F[Offset]
+  def fetchProgress: F[ProjectionProgress]
 
   /**
-    * Records the argument offset against this projection progress.
+    * Records the argument [[ProjectionProgress]] against this projection.
     *
-    * @param offset the offset to record
+    * @param progress the progress to record
     * @return a future () value upon success or a failure otherwise
     */
-  def storeLatestOffset(offset: Offset): F[Unit]
+  def storeProgress(progress: ProjectionProgress): F[Unit]
 }
 
 object ResumableProjection {
 
-  private[persistence] def apply[F[_]](id: String, storage: ProjectionStorage[F]): ResumableProjection[F] =
+  private[persistence] def apply[F[_]](id: String, storage: ProjectionProgressStorage[F]): ResumableProjection[F] =
     new ResumableProjection[F] {
       override val identifier: String = id
 
-      override def storeLatestOffset(offset: Offset): F[Unit] =
-        storage.storeOffset(identifier, offset)
+      override def storeProgress(progress: ProjectionProgress): F[Unit] =
+        storage.storeProgress(identifier, progress)
 
-      override def fetchLatestOffset: F[Offset] =
-        storage.fetchLatestOffset(identifier)
+      override def fetchProgress: F[ProjectionProgress] =
+        storage.fetchProgress(identifier)
     }
 
   /**
     * Constructs a new `ResumableProjection` instance with the specified identifier.  Calls to store or query the
     * current offset are delegated to the underlying
-    * [[ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionStorage]] extension.
+    * [[ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgressStorage]] extension.
     *
     * @param id an identifier for the projection
     * @param as an implicitly available actor system
@@ -62,6 +61,6 @@ object ResumableProjection {
     */
   // $COVERAGE-OFF$
   def apply(id: String)(implicit as: ActorSystem): ResumableProjection[Task] =
-    apply[Task](id, ProjectionStorage(as))
+    apply[Task](id, ProjectionProgressStorage(as))
   // $COVERAGE-ON$
 }

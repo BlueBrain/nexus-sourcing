@@ -1,10 +1,10 @@
 package ch.epfl.bluebrain.nexus.sourcing.persistence
 
-import _root_.akka.actor.{ActorRef, ActorSystem}
-import _root_.akka.persistence.query.Offset
+import _root_.akka.actor.ActorSystem
 import cats.effect.Effect
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag.{PersistentStreamByTag, VolatileStreamByTag}
+import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
 import ch.epfl.bluebrain.nexus.sourcing.persistence.OffsetStorage._
 import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator
 import io.circe.Encoder
@@ -26,9 +26,13 @@ object SequentialTagIndexer {
     *
     * @param config the index configuration which holds the necessary information to start the tag indexer
     */
+  // $COVERAGE-OFF$
   final def start[F[_]: Effect, Event: Typeable, MappedEvt, Err](
-      config: IndexerConfig[F, Event, MappedEvt, Err, Volatile])(implicit as: ActorSystem, sc: Scheduler): ActorRef = {
-    val streamByTag: StreamByTag[F, Offset] = new VolatileStreamByTag(config)
+      config: IndexerConfig[F, Event, MappedEvt, Err, Volatile])(
+      implicit as: ActorSystem,
+      sc: Scheduler,
+      sourcingConfig: SourcingConfig): StreamCoordinator[F, ProjectionProgress] = {
+    val streamByTag: StreamByTag[F, ProjectionProgress] = new VolatileStreamByTag(config)
     StreamCoordinator.start(streamByTag.fetchInit, streamByTag.source, config.name)
   }
 
@@ -39,11 +43,13 @@ object SequentialTagIndexer {
     * @param config the index configuration which holds the necessary information to start the tag indexer
     */
   final def start[F[_]: Effect, Event: Typeable: Encoder, MappedEvt, Err](
-      config: IndexerConfig[F, Event, MappedEvt, Err, Persist])(implicit failureLog: IndexFailuresLog[F],
-                                                                projection: ResumableProjection[F],
-                                                                as: ActorSystem,
-                                                                sc: Scheduler): ActorRef = {
-    val streamByTag: StreamByTag[F, Offset] = new PersistentStreamByTag(config)
+      config: IndexerConfig[F, Event, MappedEvt, Err, Persist])(
+      implicit failureLog: IndexFailuresLog[F],
+      projection: ResumableProjection[F],
+      as: ActorSystem,
+      sc: Scheduler,
+      sourcingConfig: SourcingConfig): StreamCoordinator[F, ProjectionProgress] = {
+    val streamByTag: StreamByTag[F, ProjectionProgress] = new PersistentStreamByTag(config)
     StreamCoordinator.start(streamByTag.fetchInit, streamByTag.source, config.name)
   }
 
@@ -54,11 +60,14 @@ object SequentialTagIndexer {
     * @param config the index configuration which holds the necessary information to start the tag indexer
     */
   final def start[Event: Typeable: Encoder, MappedEvt, Err](
-      config: IndexerConfig[Task, Event, MappedEvt, Err, Persist])(implicit
-                                                                   as: ActorSystem,
-                                                                   sc: Scheduler): ActorRef = {
+      config: IndexerConfig[Task, Event, MappedEvt, Err, Persist])(
+      implicit
+      as: ActorSystem,
+      sc: Scheduler,
+      sourcingConfig: SourcingConfig): StreamCoordinator[Task, ProjectionProgress] = {
     implicit val projection: ResumableProjection[Task] = ResumableProjection(config.name)
     implicit val failureLog: IndexFailuresLog[Task]    = IndexFailuresLog(config.name)
     start[Task, Event, MappedEvt, Err](config)
   }
+  // $COVERAGE-ON$
 }

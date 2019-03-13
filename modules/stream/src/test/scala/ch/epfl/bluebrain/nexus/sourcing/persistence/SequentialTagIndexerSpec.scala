@@ -4,9 +4,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 import _root_.akka.Done
-import _root_.akka.actor.ActorRef
 import _root_.akka.cluster.Cluster
-import _root_.akka.persistence.query.Offset
 import _root_.akka.stream.ActorMaterializer
 import _root_.akka.testkit.{TestActorRef, TestKit, TestKitBase}
 import _root_.akka.util.Timeout
@@ -14,19 +12,21 @@ import cats.MonadError
 import cats.effect.{IO, Timer}
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag.PersistentStreamByTag
+import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategyConfig, RetryStrategyConfig}
+import ch.epfl.bluebrain.nexus.sourcing.akka._
 import ch.epfl.bluebrain.nexus.sourcing.persistence.Fixture._
 import ch.epfl.bluebrain.nexus.sourcing.persistence.IndexerConfig.fromConfig
+import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress.OffsetProgress
 import ch.epfl.bluebrain.nexus.sourcing.persistence.SequentialTagIndexerSpec._
-import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator
-import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator.Stop
-import ch.epfl.bluebrain.nexus.sourcing.akka._
-import ch.epfl.bluebrain.nexus.sourcing.retry._
 import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy.Linear
+import ch.epfl.bluebrain.nexus.sourcing.retry._
+import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator
+import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator.StreamCoordinatorActor
 import io.circe.generic.auto._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
+import org.scalatest._
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -39,7 +39,8 @@ class SequentialTagIndexerSpec
     with Matchers
     with ScalaFutures
     with BeforeAndAfterAll
-    with Eventually {
+    with Eventually
+    with OptionValues {
 
   implicit lazy val system              = SystemBuilder.cluster("SequentialTagIndexerSpec")
   implicit val ec                       = system.dispatcher
@@ -82,6 +83,20 @@ class SequentialTagIndexerSpec
     }
 
     sealed abstract class Context[T](name: String, batch: Int = 1, tag: String) {
+      implicit val sourcingConfig = SourcingConfig(
+        config.askTimeout.duration,
+        "queryPlugin",
+        config.askTimeout.duration,
+        "global",
+        1,
+        PassivationStrategyConfig(None, None),
+        RetryStrategyConfig("once",
+                            config.askTimeout.duration,
+                            config.askTimeout.duration,
+                            1,
+                            0.1,
+                            config.askTimeout.duration)
+      )
       val agg = AkkaAggregate
         .sharded[IO](
           name,
@@ -120,6 +135,8 @@ class SequentialTagIndexerSpec
             case YetAnotherExecuted => Some(YetAnotherExecutedTransform)
             case RetryExecuted      => Some(RetryExecutedTransform)
             case IgnoreExecuted     => Some(IgnoreExecutedTransform)
+            case Discarded          => None
+            case NotDiscarded       => Some(NotDiscardedTransform)
           }
         }
 
@@ -136,12 +153,13 @@ class SequentialTagIndexerSpec
         .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
         .build
 
-      def buildIndexer: ActorRef = {
+      def buildIndexer: StreamCoordinator[Task, ProjectionProgress] = {
         implicit val failuresLog: IndexFailuresLog[Task]   = IndexFailuresLog(indexConfig.name)
         implicit val projection: ResumableProjection[Task] = ResumableProjection(indexConfig.name)
 
-        val streamByTag: StreamByTag[Task, Offset] = new PersistentStreamByTag(indexConfig)
-        TestActorRef(new StreamCoordinator(streamByTag.fetchInit, streamByTag.source))
+        val streamByTag: StreamByTag[Task, ProjectionProgress] = new PersistentStreamByTag(indexConfig)
+        val actor                                              = TestActorRef(new StreamCoordinatorActor(streamByTag.fetchInit, streamByTag.source))
+        new StreamCoordinator[Task, ProjectionProgress](actor)
       }
     }
 
@@ -152,11 +170,14 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 1L
         init.get shouldEqual 11L
+        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        state.processedCount shouldEqual 1L
+        state.discardedCount shouldEqual 0L
       }
 
-      watch(indexer)
-      indexer ! Stop
-      expectTerminated(indexer)
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
     }
 
     "recover from temporary failures on init function" in new Context[Event](name = "something", tag = "yetanother") {
@@ -181,11 +202,14 @@ class SequentialTagIndexerSpec
         initCalled.get shouldEqual 2L
         init.get shouldEqual 11L
         count.get shouldEqual 1L
+        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        state.processedCount shouldEqual 1L
+        state.discardedCount shouldEqual 0L
       }
 
-      watch(indexer)
-      indexer ! Stop
-      expectTerminated(indexer)
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
     }
 
     "select only the configured event types" in new Context[Event](name = "selected", batch = 2, tag = "other") {
@@ -201,11 +225,34 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 2L
         init.get shouldEqual 11L
+        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        state.processedCount shouldEqual 4L
+        state.discardedCount shouldEqual 0L
       }
 
-      watch(indexer)
-      indexer ! Stop
-      expectTerminated(indexer)
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
+    }
+
+    "count discarded events" in new Context[Event](name = "discardtest", batch = 1, tag = "discard") {
+      val indexer = buildIndexer
+      agg.append("first", Fixture.NotDiscarded).unsafeRunAsyncAndForget()
+      agg.append("second", Fixture.NotDiscarded).unsafeRunAsyncAndForget()
+      agg.append("third", Fixture.NotDiscarded).unsafeRunAsyncAndForget()
+      agg.append("discarded1", Fixture.Discarded).unsafeRunAsyncAndForget()
+      agg.append("discarded2", Fixture.Discarded).unsafeRunAsyncAndForget()
+      agg.append("discarded3", Fixture.Discarded).unsafeRunAsyncAndForget()
+      agg.append("discarded4", Fixture.Discarded).unsafeRunAsyncAndForget()
+
+      eventually {
+        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        state.discardedCount shouldEqual 4L
+        state.processedCount shouldEqual 7L
+      }
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
     }
 
     "restart the indexing if the Done is emitted" in new Context[Event](name = "agg2", tag = "another") {
@@ -215,19 +262,25 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 1L
         init.get shouldEqual 11L
+        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        state.processedCount shouldEqual 1L
+        state.discardedCount shouldEqual 0L
       }
-      indexer ! Done
+      indexer.actor ! Done
 
       agg.append("second", Fixture.AnotherExecuted).unsafeRunAsyncAndForget()
 
       eventually {
         count.get shouldEqual 2L
         init.get shouldEqual 12L
+        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        state.processedCount shouldEqual 2L
+        state.discardedCount shouldEqual 0L
       }
 
-      watch(indexer)
-      indexer ! Stop
-      expectTerminated(indexer)
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
     }
 
     "retry when index function fails" in new Context[RetryExecuted.type](name = "retry", tag = "retry") {
@@ -249,9 +302,9 @@ class SequentialTagIndexerSpec
           .futureValue shouldEqual List(RetryExecuted)
       }
 
-      watch(indexer)
-      indexer ! Stop
-      expectTerminated(indexer)
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
     }
 
     "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore",
@@ -272,9 +325,9 @@ class SequentialTagIndexerSpec
         .runFold(Vector.empty[IgnoreExecuted.type])(_ :+ _)
         .futureValue shouldEqual List(IgnoreExecuted)
 
-      watch(indexer)
-      indexer ! Stop
-      expectTerminated(indexer)
+      watch(indexer.actor)
+      indexer.stop().runSyncUnsafe()
+      expectTerminated(indexer.actor)
     }
   }
 

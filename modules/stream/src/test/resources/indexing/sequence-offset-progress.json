@@ -1,0 +1,9 @@
+{
+  "offset": {
+    "type": "Sequence",
+    "value": 14
+  },
+  "processedCount": 1,
+  "discardedCount": 0,
+  "type": "OffsetProgress"
+}

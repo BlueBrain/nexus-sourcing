@@ -17,9 +17,9 @@ import ch.epfl.bluebrain.nexus.sourcing.akka._
 import ch.epfl.bluebrain.nexus.sourcing.projections.Fixture.{memoize, _}
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionConfig.fromConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.OffsetProgress
-import ch.epfl.bluebrain.nexus.sourcing.projections.SequentialTagIndexerSpec._
-import ch.epfl.bluebrain.nexus.sourcing.projections.StreamByTag.PersistentStreamByTag
-import ch.epfl.bluebrain.nexus.sourcing.projections.StreamCoordinator.StreamCoordinatorActor
+import ch.epfl.bluebrain.nexus.sourcing.projections.StreamSupervisor.StreamSupervisorActor
+import ch.epfl.bluebrain.nexus.sourcing.projections.TagProjection.PersistentTagProjection
+import ch.epfl.bluebrain.nexus.sourcing.projections.TagProjectionSpec._
 import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy.Linear
 import ch.epfl.bluebrain.nexus.sourcing.retry._
 import io.circe.generic.auto._
@@ -31,7 +31,7 @@ import scala.concurrent.duration._
 
 //noinspection TypeAnnotation
 @DoNotDiscover
-class SequentialTagIndexerSpec
+class TagProjectionSpec
     extends TestKitBase
     with WordSpecLike
     with Matchers
@@ -39,7 +39,7 @@ class SequentialTagIndexerSpec
     with IOOptionValues
     with Eventually {
 
-  implicit lazy val system              = SystemBuilder.cluster("SequentialTagIndexerSpec")
+  implicit lazy val system              = SystemBuilder.cluster("TagProjectionSpec")
   implicit val ec                       = system.dispatcher
   implicit val mt                       = ActorMaterializer()
   private implicit val timer: Timer[IO] = IO.timer(ec)
@@ -151,11 +151,11 @@ class SequentialTagIndexerSpec
         .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
         .build
 
-      def buildIndexer: StreamCoordinator[IO, ProjectionProgress] = {
-        implicit val ps                                      = projections.ioValue
-        val streamByTag: StreamByTag[IO, ProjectionProgress] = new PersistentStreamByTag(indexConfig)
-        val actor                                            = TestActorRef(new StreamCoordinatorActor(streamByTag.fetchInit, streamByTag.source))
-        new StreamCoordinator[IO, ProjectionProgress](actor)
+      def buildIndexer: StreamSupervisor[IO, ProjectionProgress] = {
+        implicit val ps                                        = projections.ioValue
+        val streamByTag: TagProjection[IO, ProjectionProgress] = new PersistentTagProjection(indexConfig)
+        val actor                                              = TestActorRef(new StreamSupervisorActor(streamByTag.fetchInit, streamByTag.source))
+        new StreamSupervisor[IO, ProjectionProgress](actor)
       }
     }
 
@@ -334,7 +334,7 @@ class SequentialTagIndexerSpec
 
 }
 
-object SequentialTagIndexerSpec {
+object TagProjectionSpec {
   class RetriableErr(message: String)    extends Exception(message)
   case class SomeError(count: Long)      extends RetriableErr("some error")
   case class SomeOtherError(count: Long) extends Exception("some OTHER error")

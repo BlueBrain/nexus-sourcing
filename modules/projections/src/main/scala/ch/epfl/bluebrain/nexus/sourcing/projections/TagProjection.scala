@@ -9,6 +9,7 @@ import akka.stream.scaladsl.Source
 import cats.effect.Effect
 import cats.effect.syntax.all._
 import cats.implicits._
+import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressStorage._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import ch.epfl.bluebrain.nexus.sourcing.retry.Retry
@@ -18,10 +19,9 @@ import shapeless.Typeable
 import scala.concurrent.Future
 
 /**
-  *
-  * Enumeration of stream by tag types.
+  * Generic tag projection with an initialization function; it provides a source of values of type A.
   */
-sealed trait StreamByTag[F[_], A] {
+sealed trait TagProjection[F[_], A] {
 
   /**
     * @return an initialization function that fetches the value required to initialize the source
@@ -58,14 +58,50 @@ object OffsetEvtBatch {
   def empty[T]: OffsetEvtBatch[T] = OffsetEvtBatch(NoProgress, List.empty[WrappedEvt[T]])
 }
 
-object StreamByTag {
+object TagProjection {
 
-  abstract class BatchedStreamByTag[F[_], Event, MappedEvt, Err, O <: ProgressStorage](
-      config: ProjectionConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F],
-                                                             T: Typeable[Event],
-                                                             as: ActorSystem) {
+  /**
+    * Generic tag projection that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are NOT persisted once computed the index function.
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  // $COVERAGE-OFF$
+  final def start[F[_], Event: Typeable, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
+      implicit as: ActorSystem,
+      sourcingConfig: SourcingConfig,
+      F: Effect[F],
+  ): F[StreamSupervisor[F, ProjectionProgress]] = {
+    val tagProjection: TagProjection[F, ProjectionProgress] = new VolatileTagProjection(config)
+    F.delay {
+      StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
+    }
+  }
 
-    private[sourcing] implicit val log: LoggingAdapter  = Logging(as, SequentialTagIndexer.getClass)
+  /**
+    * Generic tag projection that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are persisted once computed the index function.
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  final def start[F[_], Event: Typeable, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(
+      implicit projections: Projections[F, Event],
+      as: ActorSystem,
+      sourcingConfig: SourcingConfig,
+      F: Effect[F],
+  ): F[StreamSupervisor[F, ProjectionProgress]] = {
+    val tagProjection: TagProjection[F, ProjectionProgress] = new PersistentTagProjection(config)
+    F.delay {
+      StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
+    }
+  }
+  // $COVERAGE-ON$
+
+  abstract class BatchedTagProjection[F[_], Event, MappedEvt, Err, O <: ProgressStorage](
+      config: ProjectionConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F], T: Typeable[Event], as: ActorSystem)
+      extends TagProjection[F, ProjectionProgress] {
+
+    private[sourcing] implicit val log: LoggingAdapter  = Logging(as, TagProjection.getClass)
     private[sourcing] implicit val retry: Retry[F, Err] = config.retry
     private[sourcing] type IdentifiedEvent = (String, Event, MappedEvt)
 
@@ -156,14 +192,10 @@ object StreamByTag {
     * +----------------------------+    +------------+    +-----------+    +-------------+    +-------------+    +-------------+    +--------------+
     *
     */
-  final class PersistentStreamByTag[F[_], Event, MappedEvt, Err](
-      config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(implicit
-                                                                   projections: Projections[F, Event],
-                                                                   F: Effect[F],
-                                                                   T: Typeable[Event],
-                                                                   as: ActorSystem)
-      extends BatchedStreamByTag(config)
-      with StreamByTag[F, ProjectionProgress] {
+  final class PersistentTagProjection[F[_], Event, MappedEvt, Err](
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Persist]
+  )(implicit projections: Projections[F, Event], F: Effect[F], T: Typeable[Event], as: ActorSystem)
+      extends BatchedTagProjection(config) {
 
     def fetchInit: F[ProjectionProgress] =
       if (config.storage.restart)
@@ -212,13 +244,10 @@ object StreamByTag {
     * +-----------------------+    +-----------+    +-----------+    +-------------+    +-------------+    +-------------+
     *
     */
-  final class VolatileStreamByTag[F[_], Event, MappedEvt, Err](
-      config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(implicit
-                                                                    F: Effect[F],
-                                                                    T: Typeable[Event],
-                                                                    as: ActorSystem)
-      extends BatchedStreamByTag(config)
-      with StreamByTag[F, ProjectionProgress] {
+  final class VolatileTagProjection[F[_], Event, MappedEvt, Err](
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile]
+  )(implicit F: Effect[F], T: Typeable[Event], as: ActorSystem)
+      extends BatchedTagProjection(config) {
 
     def fetchInit: F[ProjectionProgress] = config.init.retry >> F.pure(NoProgress)
 

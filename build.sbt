@@ -84,11 +84,11 @@ lazy val core = project
   )
 
 lazy val stream = project
-  .in(file("modules/stream"))
+  .in(file("modules/projections"))
   .dependsOn(core)
   .settings(
-    name       := "sourcing-stream",
-    moduleName := "sourcing-stream",
+    name       := "sourcing-projections",
+    moduleName := "sourcing-projections",
     libraryDependencies ++= Seq(
       akkaActor,
       akkaCluster,

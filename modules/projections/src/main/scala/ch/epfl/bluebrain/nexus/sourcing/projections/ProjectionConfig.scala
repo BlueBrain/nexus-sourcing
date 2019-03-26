@@ -29,7 +29,8 @@ import scala.concurrent.duration._
   * @param init               an initialization function that is run before the indexer is (re)started
   * @param batch              the number of events to be grouped
   * @param batchTo            the timeout for the grouping on batches.
-  *         Batching will the amount of time ''batchTo'' to have ''batch'' number of events the retry strategy
+  *                           Batching will the amount of time ''batchTo'' to have ''batch'' number of events the retry
+  *                           strategy.
   * @param storage            the [[ProgressStorage]]
   * @tparam Event             the event type
   * @tparam MappedEvt         the mapped event type

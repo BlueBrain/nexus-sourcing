@@ -1,12 +1,10 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import _root_.akka.actor.ActorSystem
+import akka.actor.ActorSystem
 import cats.effect.Effect
-import ch.epfl.bluebrain.nexus.sourcing.StreamByTag
-import ch.epfl.bluebrain.nexus.sourcing.StreamByTag.{PersistentStreamByTag, VolatileStreamByTag}
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
-import ch.epfl.bluebrain.nexus.sourcing.persistence.OffsetStorage._
-import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressStorage.{Persist, Volatile}
+import ch.epfl.bluebrain.nexus.sourcing.projections.StreamByTag.{PersistentStreamByTag, VolatileStreamByTag}
 import shapeless.Typeable
 
 /**
@@ -25,7 +23,7 @@ object SequentialTagIndexer {
     */
   // $COVERAGE-OFF$
   final def start[F[_]: Effect, Event: Typeable, MappedEvt, Err](
-      config: IndexerConfig[F, Event, MappedEvt, Err, Volatile])(
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
       implicit as: ActorSystem,
       sourcingConfig: SourcingConfig): StreamCoordinator[F, ProjectionProgress] = {
     val streamByTag: StreamByTag[F, ProjectionProgress] = new VolatileStreamByTag(config)
@@ -39,7 +37,7 @@ object SequentialTagIndexer {
     * @param config the index configuration which holds the necessary information to start the tag indexer
     */
   final def start[F[_]: Effect, Event: Typeable, MappedEvt, Err](
-      config: IndexerConfig[F, Event, MappedEvt, Err, Persist])(
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(
       implicit projections: Projections[F, Event],
       as: ActorSystem,
       sourcingConfig: SourcingConfig): StreamCoordinator[F, ProjectionProgress] = {

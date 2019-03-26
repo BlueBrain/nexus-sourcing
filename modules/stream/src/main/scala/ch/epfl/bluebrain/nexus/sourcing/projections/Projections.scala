@@ -1,4 +1,4 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import akka.Done
 import akka.actor.ActorSystem
@@ -9,7 +9,7 @@ import akka.persistence.query.{Sequence, TimeBasedUUID}
 import akka.stream.scaladsl.Source
 import cats.effect._
 import cats.implicits._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress.{NoProgress, OffsetProgress}
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.{NoProgress, OffsetProgress}
 import com.datastax.driver.core.Session
 import com.google.common.util.concurrent.ListenableFuture
 import io.circe.parser.decode
@@ -39,7 +39,7 @@ trait Projections[F[_], E] {
 
   /**
     * Retrieves the progress for the specified projection projectionId. If there is no record of progress
-    * the [[ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress.NoProgress]] is returned.
+    * the [[projections.ProjectionProgress.NoProgress]] is returned.
     *
     * @param id an unique projectionId for a projection
     * @return a future progress value for the specified projection projectionId

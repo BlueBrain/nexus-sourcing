@@ -1,18 +1,17 @@
-package ch.epfl.bluebrain.nexus.sourcing.stream
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import _root_.akka.Done
-import _root_.akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Status}
-import _root_.akka.pattern.ask
-import _root_.akka.pattern.pipe
-import _root_.akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
-import _root_.akka.stream.{ActorMaterializer, KillSwitches, UniqueKillSwitch}
+import akka.Done
+import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Status}
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
+import akka.pattern.{ask, pipe}
+import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, KillSwitches, UniqueKillSwitch}
 import akka.util.Timeout
-import cats.effect.{Effect, IO}
 import cats.effect.syntax.all._
+import cats.effect.{Effect, IO}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
-import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator._
+import ch.epfl.bluebrain.nexus.sourcing.projections.StreamCoordinator.{FetchLatestState, LatestState, Stop}
 import shapeless.Typeable
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -28,7 +27,8 @@ class StreamCoordinator[F[_], A](val actor: ActorRef)(implicit F: Effect[F], con
   private implicit val askTimeout: Timeout = config.askTimeout
 
   /**
-    * Fetches the latest state from the underlying actor [[StreamCoordinatorActor]] .
+    * Fetches the latest state from the underlying actor
+    * [[ch.epfl.bluebrain.nexus.sourcing.projections.StreamCoordinator.StreamCoordinatorActor]] .
     *
     * @return latest state wrapped in [[F]]
     */

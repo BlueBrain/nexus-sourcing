@@ -1,36 +1,33 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
-import _root_.akka.Done
-import _root_.akka.cluster.Cluster
-import _root_.akka.stream.ActorMaterializer
-import _root_.akka.testkit.{TestActorRef, TestKit, TestKitBase}
-import _root_.akka.util.Timeout
+import akka.Done
+import akka.cluster.Cluster
+import akka.stream.ActorMaterializer
+import akka.testkit.{TestActorRef, TestKit, TestKitBase}
+import akka.util.Timeout
 import cats.MonadError
 import cats.effect.{IO, Timer}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.commons.test.io.IOOptionValues
-import ch.epfl.bluebrain.nexus.sourcing.StreamByTag
-import Fixture.memoize
-import ch.epfl.bluebrain.nexus.sourcing.StreamByTag.PersistentStreamByTag
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategyConfig, RetryStrategyConfig}
 import ch.epfl.bluebrain.nexus.sourcing.akka._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.Fixture._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.IndexerConfig.fromConfig
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress.OffsetProgress
-import ch.epfl.bluebrain.nexus.sourcing.persistence.SequentialTagIndexerSpec._
+import ch.epfl.bluebrain.nexus.sourcing.projections.Fixture.{memoize, _}
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionConfig.fromConfig
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.OffsetProgress
+import ch.epfl.bluebrain.nexus.sourcing.projections.SequentialTagIndexerSpec._
+import ch.epfl.bluebrain.nexus.sourcing.projections.StreamByTag.PersistentStreamByTag
+import ch.epfl.bluebrain.nexus.sourcing.projections.StreamCoordinator.StreamCoordinatorActor
 import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy.Linear
 import ch.epfl.bluebrain.nexus.sourcing.retry._
-import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator
-import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator.StreamCoordinatorActor
 import io.circe.generic.auto._
-import org.scalatest.concurrent.Eventually
 import org.scalatest._
+import org.scalatest.concurrent.Eventually
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 //noinspection TypeAnnotation
 @DoNotDiscover

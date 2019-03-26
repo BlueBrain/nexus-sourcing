@@ -1,8 +1,8 @@
-package ch.epfl.bluebrain.nexus.sourcing
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import _root_.akka.actor.ActorSystem
-import _root_.akka.cluster.Cluster
-import _root_.akka.testkit._
+import akka.actor.ActorSystem
+import akka.cluster.Cluster
+import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.concurrent.ScalaFutures._

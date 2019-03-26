@@ -1,18 +1,16 @@
-package ch.epfl.bluebrain.nexus.sourcing
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import _root_.akka.NotUsed
-import _root_.akka.actor.ActorSystem
-import _root_.akka.event.Logging
-import _root_.akka.event.LoggingAdapter
-import _root_.akka.persistence.query.scaladsl.EventsByTagQuery
-import _root_.akka.persistence.query.{EventEnvelope, PersistenceQuery}
-import _root_.akka.stream.scaladsl.Source
+import akka.NotUsed
+import akka.actor.ActorSystem
+import akka.event.{Logging, LoggingAdapter}
+import akka.persistence.query.scaladsl.EventsByTagQuery
+import akka.persistence.query.{EventEnvelope, PersistenceQuery}
+import akka.stream.scaladsl.Source
 import cats.effect.Effect
 import cats.effect.syntax.all._
 import cats.implicits._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.OffsetStorage._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress._
-import ch.epfl.bluebrain.nexus.sourcing.persistence._
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressStorage._
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import ch.epfl.bluebrain.nexus.sourcing.retry.Retry
 import ch.epfl.bluebrain.nexus.sourcing.retry.syntax._
 import shapeless.Typeable
@@ -62,8 +60,10 @@ object OffsetEvtBatch {
 
 object StreamByTag {
 
-  abstract class BatchedStreamByTag[F[_], Event, MappedEvt, Err, O <: OffsetStorage](
-      config: IndexerConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F], T: Typeable[Event], as: ActorSystem) {
+  abstract class BatchedStreamByTag[F[_], Event, MappedEvt, Err, O <: ProgressStorage](
+      config: ProjectionConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F],
+                                                             T: Typeable[Event],
+                                                             as: ActorSystem) {
 
     private[sourcing] implicit val log: LoggingAdapter  = Logging(as, SequentialTagIndexer.getClass)
     private[sourcing] implicit val retry: Retry[F, Err] = config.retry
@@ -157,11 +157,11 @@ object StreamByTag {
     *
     */
   final class PersistentStreamByTag[F[_], Event, MappedEvt, Err](
-      config: IndexerConfig[F, Event, MappedEvt, Err, Persist])(implicit
-                                                                projections: Projections[F, Event],
-                                                                F: Effect[F],
-                                                                T: Typeable[Event],
-                                                                as: ActorSystem)
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(implicit
+                                                                   projections: Projections[F, Event],
+                                                                   F: Effect[F],
+                                                                   T: Typeable[Event],
+                                                                   as: ActorSystem)
       extends BatchedStreamByTag(config)
       with StreamByTag[F, ProjectionProgress] {
 
@@ -213,10 +213,10 @@ object StreamByTag {
     *
     */
   final class VolatileStreamByTag[F[_], Event, MappedEvt, Err](
-      config: IndexerConfig[F, Event, MappedEvt, Err, Volatile])(implicit
-                                                                 F: Effect[F],
-                                                                 T: Typeable[Event],
-                                                                 as: ActorSystem)
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(implicit
+                                                                    F: Effect[F],
+                                                                    T: Typeable[Event],
+                                                                    as: ActorSystem)
       extends BatchedStreamByTag(config)
       with StreamByTag[F, ProjectionProgress] {
 

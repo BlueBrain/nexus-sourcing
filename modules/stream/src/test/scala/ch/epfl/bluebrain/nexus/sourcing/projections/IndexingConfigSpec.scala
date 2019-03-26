@@ -1,9 +1,9 @@
-package ch.epfl.bluebrain.nexus.sourcing
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import java.io.File
 
-import _root_.akka.actor.ActorSystem
-import _root_.akka.testkit.TestKit
+import akka.actor.ActorSystem
+import akka.testkit.TestKit
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{Matchers, OptionValues, WordSpecLike}

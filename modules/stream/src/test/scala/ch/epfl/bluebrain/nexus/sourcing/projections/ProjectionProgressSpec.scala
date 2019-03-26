@@ -1,10 +1,10 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import java.util.UUID
 
-import _root_.akka.persistence.query.{NoOffset, Sequence, TimeBasedUUID}
+import akka.persistence.query.{NoOffset, Sequence, TimeBasedUUID}
 import ch.epfl.bluebrain.nexus.commons.test.Resources
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress._
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import io.circe.{Encoder, Json}
 import org.scalatest.{EitherValues, Inspectors, Matchers, WordSpecLike}
 import shapeless.Typeable

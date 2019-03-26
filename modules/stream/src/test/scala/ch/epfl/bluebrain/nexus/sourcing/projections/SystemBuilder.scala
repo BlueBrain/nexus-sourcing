@@ -1,10 +1,10 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import java.net.InetSocketAddress
 import java.nio.channels.ServerSocketChannel
 
-import _root_.akka.actor.ActorSystem
-import _root_.akka.persistence.cassandra.testkit.CassandraLauncher
+import akka.actor.ActorSystem
+import akka.persistence.cassandra.testkit.CassandraLauncher
 import com.typesafe.config.ConfigFactory
 
 /**

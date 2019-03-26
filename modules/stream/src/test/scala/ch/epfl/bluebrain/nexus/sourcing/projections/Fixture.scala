@@ -1,6 +1,6 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import _root_.akka.persistence.journal.{Tagged, WriteEventAdapter}
+import akka.persistence.journal.{Tagged, WriteEventAdapter}
 import cats.effect.{IO, Sync}
 import cats.effect.concurrent.Ref
 import com.github.ghik.silencer.silent

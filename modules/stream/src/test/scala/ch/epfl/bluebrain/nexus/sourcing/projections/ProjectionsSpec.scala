@@ -1,16 +1,16 @@
-package ch.epfl.bluebrain.nexus.sourcing.persistence
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import _root_.akka.persistence.query.Offset
-import _root_.akka.testkit.{TestKit, TestKitBase}
 import akka.actor.ActorSystem
+import akka.persistence.query.Offset
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
+import akka.testkit.{TestKit, TestKitBase}
 import cats.effect.IO
 import ch.epfl.bluebrain.nexus.commons.test.Randomness
 import ch.epfl.bluebrain.nexus.commons.test.io.IOValues
-import ch.epfl.bluebrain.nexus.sourcing.persistence.Fixture.memoize
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionsSpec.SomeEvent
+import ch.epfl.bluebrain.nexus.sourcing.projections.Fixture.memoize
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionsSpec.SomeEvent
 import io.circe.generic.auto._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}

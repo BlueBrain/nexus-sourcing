@@ -1,9 +1,8 @@
-package ch.epfl.bluebrain.nexus.sourcing
+package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import java.io.File
 
-import _root_.akka.persistence.cassandra.testkit.CassandraLauncher
-import ch.epfl.bluebrain.nexus.sourcing.persistence._
+import akka.persistence.cassandra.testkit.CassandraLauncher
 import org.scalatest.{BeforeAndAfterAll, Suites}
 
 class CassandraSpec

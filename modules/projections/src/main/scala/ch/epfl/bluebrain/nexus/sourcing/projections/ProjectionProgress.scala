@@ -6,7 +6,8 @@ import akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
 import io.circe._
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.{deriveDecoder, deriveEncoder}
-import shapeless.Typeable
+
+import scala.reflect.ClassTag
 
 /**
   * Representation of projection progress.
@@ -50,13 +51,6 @@ object ProjectionProgress {
   private implicit val config: Configuration = Configuration.default
     .withDiscriminator("type")
 
-  final implicit val noOffsetTypeable: Typeable[NoOffset.type] =
-    new Typeable[NoOffset.type] {
-      override def cast(t: Any): Option[NoOffset.type] =
-        if (NoOffset == t) Some(NoOffset) else None
-      override def describe: String = "NoOffset"
-    }
-
   final implicit val sequenceEncoder: Encoder[Sequence] = Encoder.instance { seq =>
     Json.obj("value" -> Json.fromLong(seq.value))
   }
@@ -85,10 +79,12 @@ object ProjectionProgress {
     case o: NoOffset.type => encodeDiscriminated(o)
   }
 
-  final implicit val offsetDecoder: Decoder[Offset] = {
-    val sequence      = Typeable[Sequence].describe
-    val timeBasedUUID = Typeable[TimeBasedUUID].describe
-    val noOffset      = Typeable[NoOffset.type].describe
+  final implicit def offsetDecoder(implicit S: ClassTag[Sequence],
+                                   TBU: ClassTag[TimeBasedUUID],
+                                   NO: ClassTag[NoOffset.type]): Decoder[Offset] = {
+    val sequence      = S.runtimeClass.getSimpleName
+    val timeBasedUUID = TBU.runtimeClass.getSimpleName
+    val noOffset      = NO.runtimeClass.getSimpleName
 
     Decoder.instance { cursor =>
       cursor.get[String]("type").flatMap {
@@ -105,6 +101,6 @@ object ProjectionProgress {
   implicit val projectionProgressEncoder: Encoder[ProjectionProgress] = deriveEncoder[ProjectionProgress]
   implicit val projectionProgressDecoder: Decoder[ProjectionProgress] = deriveDecoder[ProjectionProgress]
 
-  private def encodeDiscriminated[A: Encoder: Typeable](a: A) =
-    Encoder[A].apply(a).deepMerge(Json.obj("type" -> Json.fromString(Typeable[A].describe)))
+  private def encodeDiscriminated[A: Encoder](a: A)(implicit A: ClassTag[A]) =
+    Encoder[A].apply(a).deepMerge(Json.obj("type" -> Json.fromString(A.runtimeClass.getSimpleName)))
 }

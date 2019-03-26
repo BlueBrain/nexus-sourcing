@@ -12,7 +12,6 @@ import cats.effect.{Effect, IO}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.StreamSupervisor.{FetchLatestState, LatestState, Stop}
-import shapeless.Typeable
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.reflect.ClassTag
@@ -55,11 +54,11 @@ object StreamSupervisor {
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
     * @param source an initialization function that produces a stream from an initial start value
     */
-  class StreamSupervisorActor[F[_], A: Typeable](init: F[A], source: A => Source[A, _])(implicit F: Effect[F])
+  class StreamSupervisorActor[F[_], A: ClassTag](init: F[A], source: A => Source[A, _])(implicit F: Effect[F])
       extends Actor
       with ActorLogging {
 
-    private val A                              = implicitly[Typeable[A]]
+    private val A                              = implicitly[ClassTag[A]]
     private implicit val as: ActorSystem       = context.system
     private implicit val ec: ExecutionContext  = as.dispatcher
     private implicit val mt: ActorMaterializer = ActorMaterializer()
@@ -92,11 +91,11 @@ object StreamSupervisor {
 
     override def receive: Receive = {
       case Start(any) =>
-        A.cast(any) match {
-          case Some(a) =>
+        any match {
+          case A(a) =>
             log.info(
               "Received initial start value of type '{}', with value '{}' running the indexing function across the element stream",
-              A.describe,
+              A.runtimeClass.getSimpleName,
               a)
             state = Some(a)
             val (killSwitch, doneFuture) = buildStream(a).run()
@@ -104,7 +103,9 @@ object StreamSupervisor {
             context.become(running(killSwitch))
           // $COVERAGE-OFF$
           case _ =>
-            log.error("Received unknown initial start value '{}', expecting type '{}', stopping", any, A.describe)
+            log.error("Received unknown initial start value '{}', expecting type '{}', stopping",
+                      any,
+                      A.runtimeClass.getSimpleName)
             context.stop(self)
           // $COVERAGE-ON$
         }
@@ -157,7 +158,7 @@ object StreamSupervisor {
     * @param source an initialization function that produces a stream from an initial start value
     */
   // $COVERAGE-OFF$
-  final def props[F[_]: Effect, A: Typeable](init: F[A], source: A => Source[A, _]): Props =
+  final def props[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _]): Props =
     Props(new StreamSupervisorActor(init, source))
 
   /**
@@ -166,7 +167,7 @@ object StreamSupervisor {
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
     * @param source an initialization function that produces a stream from an initial start value
     */
-  final def start[F[_]: Effect, A: Typeable](init: F[A], source: A => Source[A, _], name: String)(
+  final def start[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
       implicit as: ActorSystem,
       config: SourcingConfig): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](as.actorOf(props(init, source), name))
@@ -177,7 +178,7 @@ object StreamSupervisor {
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
     * @param source an initialization function that produces a stream from an initial start value
     */
-  final def singletonProps[F[_]: Effect, A: Typeable](init: F[A], source: A => Source[A, _])(
+  final def singletonProps[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _])(
       implicit as: ActorSystem): Props =
     ClusterSingletonManager.props(Props(new StreamSupervisorActor(init, source)),
                                   terminationMessage = Stop,
@@ -189,7 +190,7 @@ object StreamSupervisor {
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
     * @param source an initialization function that produces a stream from an initial start value
     */
-  final def startSingleton[F[_]: Effect, A: Typeable](init: F[A], source: A => Source[A, _], name: String)(
+  final def startSingleton[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
       implicit as: ActorSystem,
       config: SourcingConfig): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](as.actorOf(singletonProps(init, source), name))

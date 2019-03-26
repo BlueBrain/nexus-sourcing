@@ -14,9 +14,9 @@ import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressStorage._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import ch.epfl.bluebrain.nexus.sourcing.retry.Retry
 import ch.epfl.bluebrain.nexus.sourcing.retry.syntax._
-import shapeless.Typeable
 
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 /**
   * Generic tag projection with an initialization function; it provides a source of values of type A.
@@ -67,7 +67,7 @@ object TagProjection {
     * @param config the index configuration which holds the necessary information to start the tag indexer
     */
   // $COVERAGE-OFF$
-  final def start[F[_], Event: Typeable, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
+  final def start[F[_], Event: ClassTag, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
       implicit as: ActorSystem,
       sourcingConfig: SourcingConfig,
       F: Effect[F],
@@ -84,7 +84,7 @@ object TagProjection {
     *
     * @param config the index configuration which holds the necessary information to start the tag indexer
     */
-  final def start[F[_], Event: Typeable, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(
+  final def start[F[_], Event: ClassTag, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(
       implicit projections: Projections[F, Event],
       as: ActorSystem,
       sourcingConfig: SourcingConfig,
@@ -98,7 +98,7 @@ object TagProjection {
   // $COVERAGE-ON$
 
   abstract class BatchedTagProjection[F[_], Event, MappedEvt, Err, O <: ProgressStorage](
-      config: ProjectionConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F], T: Typeable[Event], as: ActorSystem)
+      config: ProjectionConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F], T: ClassTag[Event], as: ActorSystem)
       extends TagProjection[F, ProjectionProgress] {
 
     private[sourcing] implicit val log: LoggingAdapter  = Logging(as, TagProjection.getClass)
@@ -139,10 +139,11 @@ object TagProjection {
 
     private def castEvent(envelope: EventEnvelope): (EventEnvelope, Option[Event]) = {
       log.debug("Processing event for persistence id '{}', seqNr '{}'", envelope.persistenceId, envelope.sequenceNr)
-      T.cast(envelope.event) match {
-        case Some(casted) => (envelope, Some(casted))
+      envelope.event match {
+        case T(casted) => (envelope, Some(casted))
         case _ =>
-          log.warning("Some of the Events on the list are not compatible with type '{}', skipping...", T.describe)
+          log.warning("Some of the Events on the list are not compatible with type '{}', skipping...",
+                      T.runtimeClass.getSimpleName)
           (envelope, None)
       }
     }
@@ -194,7 +195,7 @@ object TagProjection {
     */
   final class PersistentTagProjection[F[_], Event, MappedEvt, Err](
       config: ProjectionConfig[F, Event, MappedEvt, Err, Persist]
-  )(implicit projections: Projections[F, Event], F: Effect[F], T: Typeable[Event], as: ActorSystem)
+  )(implicit projections: Projections[F, Event], F: Effect[F], T: ClassTag[Event], as: ActorSystem)
       extends BatchedTagProjection(config) {
 
     def fetchInit: F[ProjectionProgress] =
@@ -246,7 +247,7 @@ object TagProjection {
     */
   final class VolatileTagProjection[F[_], Event, MappedEvt, Err](
       config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile]
-  )(implicit F: Effect[F], T: Typeable[Event], as: ActorSystem)
+  )(implicit F: Effect[F], T: ClassTag[Event], as: ActorSystem)
       extends BatchedTagProjection(config) {
 
     def fetchInit: F[ProjectionProgress] = config.init.retry >> F.pure(NoProgress)

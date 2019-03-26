@@ -42,7 +42,6 @@ val pureconfigVersion               = "0.10.2"
 // Dependency modules
 lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion
 lazy val catsEffect               = "org.typelevel"           %% "cats-effect"                         % catsEffectVersion
-lazy val shapeless                = "com.chuusai"             %% "shapeless"                           % shapelessVersion
 lazy val akkaActor                = "com.typesafe.akka"       %% "akka-actor"                          % akkaVersion
 lazy val akkaCluster              = "com.typesafe.akka"       %% "akka-cluster"                        % akkaVersion
 lazy val akkaClusterSharding      = "com.typesafe.akka"       %% "akka-cluster-sharding"               % akkaVersion
@@ -98,7 +97,6 @@ lazy val stream = project
       circeParser,
       journal,
       pureconfig,
-      shapeless,
       akkaPersistenceLauncher % Test,
       akkaTestKit             % Test,
       akkaHttpTestKit         % Test,

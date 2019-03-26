@@ -2,12 +2,11 @@ package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import java.util.UUID
 
-import akka.persistence.query.{NoOffset, Sequence, TimeBasedUUID}
+import akka.persistence.query.{Sequence, TimeBasedUUID}
 import ch.epfl.bluebrain.nexus.commons.test.Resources
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
-import io.circe.{Encoder, Json}
+import io.circe.Encoder
 import org.scalatest.{EitherValues, Inspectors, Matchers, WordSpecLike}
-import shapeless.Typeable
 
 class ProjectionProgressSpec extends WordSpecLike with Matchers with Inspectors with Resources with EitherValues {
 
@@ -31,21 +30,6 @@ class ProjectionProgressSpec extends WordSpecLike with Matchers with Inspectors 
         case (prog, repr) =>
           repr.as[ProjectionProgress].right.value shouldEqual prog
       }
-    }
-  }
-
-  "A Typeable[NoOffset] instance" should {
-
-    "cast a noOffset value" in {
-      Typeable[NoOffset.type].cast(NoOffset) shouldEqual Some(NoOffset)
-    }
-
-    "not cast an arbitrary value" in {
-      Typeable[NoOffset.type].cast(Json.obj()) shouldEqual None
-    }
-
-    "describe NoOffset by its object name" in {
-      Typeable[NoOffset.type].describe shouldEqual "NoOffset"
     }
   }
 }

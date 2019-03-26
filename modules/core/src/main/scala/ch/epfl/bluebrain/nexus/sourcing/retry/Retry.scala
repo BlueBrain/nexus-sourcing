@@ -56,7 +56,7 @@ object Retry {
           fa.handleErrorWith { error =>
             strategy.next(previousDelay, currentRetries) match {
               case Some(newDelay) if newDelay.toMillis == 0L => inner(newDelay, currentRetries + 1)
-              case Some(newDelay)                            => T.sleep(newDelay) *> inner(newDelay, currentRetries + 1)
+              case Some(newDelay)                            => T.sleep(newDelay) >> inner(newDelay, currentRetries + 1)
               case _                                         => F.raiseError(error)
             }
           }

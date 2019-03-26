@@ -1,7 +1,8 @@
 package ch.epfl.bluebrain.nexus.sourcing.persistence
 
 import _root_.akka.persistence.journal.{Tagged, WriteEventAdapter}
-import cats.effect.IO
+import cats.effect.{IO, Sync}
+import cats.effect.concurrent.Ref
 import com.github.ghik.silencer.silent
 
 object Fixture {
@@ -67,5 +68,13 @@ object Fixture {
     case ExecuteRetry      => IO.pure(Right(RetryExecuted))
     case ExecuteIgnore     => IO.pure(Right(IgnoreExecuted))
 
+  }
+
+  def memoize[F[_], A](fa: F[A])(implicit F: Sync[F]): F[F[A]] = {
+    import cats.implicits._
+    for {
+      ref <- Ref[F].of(fa.attempt)
+      _   <- ref.update(_.flatTap(a => ref.set(a.pure[F])))
+    } yield ref.get.flatten.rethrow
   }
 }

@@ -5,12 +5,11 @@ import java.util.UUID
 import _root_.akka.persistence.query.{NoOffset, Sequence, TimeBasedUUID}
 import ch.epfl.bluebrain.nexus.commons.test.Resources
 import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgress._
-import ch.epfl.bluebrain.nexus.sourcing.persistence.ProjectionProgressCodec._
 import io.circe.{Encoder, Json}
 import org.scalatest.{EitherValues, Inspectors, Matchers, WordSpecLike}
 import shapeless.Typeable
 
-class ProjectionProgressCodecSpec extends WordSpecLike with Matchers with Inspectors with Resources with EitherValues {
+class ProjectionProgressSpec extends WordSpecLike with Matchers with Inspectors with Resources with EitherValues {
 
   "A ProjectionProgress" should {
     val mapping = Map(

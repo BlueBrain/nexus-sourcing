@@ -10,7 +10,10 @@ import _root_.akka.testkit.{TestActorRef, TestKit, TestKitBase}
 import _root_.akka.util.Timeout
 import cats.MonadError
 import cats.effect.{IO, Timer}
+import cats.implicits._
+import ch.epfl.bluebrain.nexus.commons.test.io.IOOptionValues
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag
+import Fixture.memoize
 import ch.epfl.bluebrain.nexus.sourcing.StreamByTag.PersistentStreamByTag
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategyConfig, RetryStrategyConfig}
 import ch.epfl.bluebrain.nexus.sourcing.akka._
@@ -23,13 +26,11 @@ import ch.epfl.bluebrain.nexus.sourcing.retry._
 import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator
 import ch.epfl.bluebrain.nexus.sourcing.stream.StreamCoordinator.StreamCoordinatorActor
 import io.circe.generic.auto._
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
-import org.scalatest.concurrent.{Eventually, ScalaFutures}
+import org.scalatest.concurrent.Eventually
 import org.scalatest._
 
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 //noinspection TypeAnnotation
 @DoNotDiscover
@@ -37,15 +38,16 @@ class SequentialTagIndexerSpec
     extends TestKitBase
     with WordSpecLike
     with Matchers
-    with ScalaFutures
     with BeforeAndAfterAll
-    with Eventually
-    with OptionValues {
+    with IOOptionValues
+    with Eventually {
 
   implicit lazy val system              = SystemBuilder.cluster("SequentialTagIndexerSpec")
   implicit val ec                       = system.dispatcher
   implicit val mt                       = ActorMaterializer()
   private implicit val timer: Timer[IO] = IO.timer(ec)
+
+  val projections = memoize(Projections[IO, Fixture.Event])(IO.ioEffect).unsafeRunSync()
 
   private val cluster = Cluster(system)
 
@@ -71,15 +73,17 @@ class SequentialTagIndexerSpec
       ExecutionContext.global
     )
 
-    implicit val F: MonadError[Task, RetriableErr] = new MonadError[Task, RetriableErr] {
-
-      override def handleErrorWith[A](fa: Task[A])(f: RetriableErr => Task[A]): Task[A] = fa.onErrorRecoverWith {
-        case t: RetriableErr => f(t)
-      }
-      override def raiseError[A](e: RetriableErr): Task[A]                   = Task.raiseError(e)
-      override def pure[A](x: A): Task[A]                                    = Task.pure(x)
-      override def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B]      = fa.flatMap(f)
-      override def tailRecM[A, B](a: A)(f: A => Task[Either[A, B]]): Task[B] = Task.tailRecM(a)(f)
+    implicit val F: MonadError[IO, RetriableErr] = new MonadError[IO, RetriableErr] {
+      override def handleErrorWith[A](fa: IO[A])(f: RetriableErr => IO[A]): IO[A] =
+        IO.ioEffect.handleErrorWith(fa) {
+          case t: RetriableErr => f(t)
+          case other           => IO.raiseError(other)
+        }
+      override def raiseError[A](e: RetriableErr): IO[A]          = IO.raiseError(e)
+      override def pure[A](x: A): IO[A]                           = IO.pure(x)
+      override def flatMap[A, B](fa: IO[A])(f: A => IO[B]): IO[B] = fa.flatMap(f)
+      override def tailRecM[A, B](a: A)(f: A => IO[Either[A, B]]): IO[B] =
+        IO.ioEffect.tailRecM(a)(f)
     }
 
     sealed abstract class Context[T](name: String, batch: Int = 1, tag: String) {
@@ -113,21 +117,18 @@ class SequentialTagIndexerSpec
       val count = new AtomicLong(0L)
       val init  = new AtomicLong(10L)
 
-      def initFunction(init: AtomicLong): Task[Unit] =
-        Task.deferFuture {
-          init.incrementAndGet()
-          Future.successful(())
-        }
+      def initFunction(init: AtomicLong): IO[Unit] =
+        IO.delay(init.incrementAndGet()) >> IO.unit
 
-      def index: List[EventTransform] => Task[Unit] =
+      def index: List[EventTransform] => IO[Unit] =
         (l: List[EventTransform]) =>
-          Task.deferFuture(Future.successful[Unit] {
+          IO.delay {
             l.size shouldEqual batch
-            val _ = count.incrementAndGet()
-          })
+            count.incrementAndGet()
+          } >> IO.unit
 
-      def mapping(event: Event): Task[Option[EventTransform]] =
-        Task {
+      def mapping(event: Event): IO[Option[EventTransform]] =
+        IO {
           event match {
             case Executed           => Some(ExecutedTransform)
             case OtherExecuted      => Some(OtherExecutedTransform)
@@ -142,7 +143,7 @@ class SequentialTagIndexerSpec
 
       val projId = UUID.randomUUID().toString
 
-      lazy val indexConfig = fromConfig[Task]
+      lazy val indexConfig = fromConfig[IO]
         .name(projId)
         .plugin(pluginId)
         .tag(tag)
@@ -153,13 +154,11 @@ class SequentialTagIndexerSpec
         .retry[RetriableErr](Linear(100 millis, 1 second, maxRetries = 3))
         .build
 
-      def buildIndexer: StreamCoordinator[Task, ProjectionProgress] = {
-        implicit val failuresLog: IndexFailuresLog[Task]   = IndexFailuresLog(indexConfig.name)
-        implicit val projection: ResumableProjection[Task] = ResumableProjection(indexConfig.name)
-
-        val streamByTag: StreamByTag[Task, ProjectionProgress] = new PersistentStreamByTag(indexConfig)
-        val actor                                              = TestActorRef(new StreamCoordinatorActor(streamByTag.fetchInit, streamByTag.source))
-        new StreamCoordinator[Task, ProjectionProgress](actor)
+      def buildIndexer: StreamCoordinator[IO, ProjectionProgress] = {
+        implicit val ps                                      = projections.ioValue
+        val streamByTag: StreamByTag[IO, ProjectionProgress] = new PersistentStreamByTag(indexConfig)
+        val actor                                            = TestActorRef(new StreamCoordinatorActor(streamByTag.fetchInit, streamByTag.source))
+        new StreamCoordinator[IO, ProjectionProgress](actor)
       }
     }
 
@@ -170,13 +169,13 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 1L
         init.get shouldEqual 11L
-        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        val state = indexer.state().some.asInstanceOf[OffsetProgress]
         state.processedCount shouldEqual 1L
         state.discardedCount shouldEqual 0L
       }
 
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
 
@@ -184,15 +183,14 @@ class SequentialTagIndexerSpec
 
       val initCalled = new AtomicLong(0L)
 
-      override def initFunction(init: AtomicLong): Task[Unit] =
-        Task.deferFuture {
+      override def initFunction(init: AtomicLong): IO[Unit] =
+        IO.delay {
           if (initCalled.compareAndSet(0L, 1L) || initCalled.compareAndSet(1L, 2L))
-            Future.failed(new RetriableErr("recoverable error"))
+            throw new RetriableErr("recoverable error")
           else {
             init.incrementAndGet()
-            Future.successful(())
           }
-        }
+        } >> IO.unit
 
       val indexer = buildIndexer
 
@@ -202,13 +200,13 @@ class SequentialTagIndexerSpec
         initCalled.get shouldEqual 2L
         init.get shouldEqual 11L
         count.get shouldEqual 1L
-        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        val state = indexer.state().some.asInstanceOf[OffsetProgress]
         state.processedCount shouldEqual 1L
         state.discardedCount shouldEqual 0L
       }
 
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
 
@@ -225,13 +223,13 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 2L
         init.get shouldEqual 11L
-        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        val state = indexer.state().some.asInstanceOf[OffsetProgress]
         state.processedCount shouldEqual 4L
         state.discardedCount shouldEqual 0L
       }
 
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
 
@@ -246,12 +244,12 @@ class SequentialTagIndexerSpec
       agg.append("discarded4", Fixture.Discarded).unsafeRunAsyncAndForget()
 
       eventually {
-        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        val state = indexer.state().some.asInstanceOf[OffsetProgress]
         state.discardedCount shouldEqual 4L
         state.processedCount shouldEqual 7L
       }
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
 
@@ -262,7 +260,7 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 1L
         init.get shouldEqual 11L
-        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        val state = indexer.state().some.asInstanceOf[OffsetProgress]
         state.processedCount shouldEqual 1L
         state.discardedCount shouldEqual 0L
       }
@@ -273,60 +271,66 @@ class SequentialTagIndexerSpec
       eventually {
         count.get shouldEqual 2L
         init.get shouldEqual 12L
-        val state = indexer.state().runSyncUnsafe().value.asInstanceOf[OffsetProgress]
+        val state = indexer.state().some.asInstanceOf[OffsetProgress]
         state.processedCount shouldEqual 2L
         state.discardedCount shouldEqual 0L
       }
 
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
 
     "retry when index function fails" in new Context[RetryExecuted.type](name = "retry", tag = "retry") {
       override val index =
-        (_: List[EventTransform]) => Task.deferFuture(Future.failed[Unit](SomeError(count.incrementAndGet())))
+        (_: List[EventTransform]) => IO.delay { throw SomeError(count.incrementAndGet()) }
 
       val indexer = buildIndexer
 
       agg.append("retry", Fixture.RetryExecuted).unsafeRunAsyncAndForget()
 
       eventually {
-        count.get shouldEqual 4
+        count.get shouldEqual 4L
         init.get shouldEqual 11L
       }
       eventually {
-        IndexFailuresLog(projId)
-          .fetchEvents[RetryExecuted.type]
-          .runFold(Vector.empty[RetryExecuted.type])(_ :+ _)
+        projections.ioValue
+          .failures(projId)
+          .runFold(Vector.empty[Fixture.Event]) {
+            case (acc, (ev, _)) => acc :+ ev
+          }
           .futureValue shouldEqual List(RetryExecuted)
       }
 
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
 
     "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore",
                                                                                                       tag = "ignore") {
       override val index =
-        (_: List[EventTransform]) => Task.deferFuture(Future.failed(SomeOtherError(count.incrementAndGet())))
+        (_: List[EventTransform]) => IO.delay(throw SomeOtherError(count.incrementAndGet()))
 
       val indexer = buildIndexer
-      agg.append("ignore", Fixture.IgnoreExecuted).unsafeRunAsyncAndForget()
+      val _       = agg.append("ignore", Fixture.IgnoreExecuted).ioValue
 
       eventually {
         count.get shouldEqual 1L
         init.get shouldEqual 11L
       }
 
-      IndexFailuresLog(projId)
-        .fetchEvents[IgnoreExecuted.type]
-        .runFold(Vector.empty[IgnoreExecuted.type])(_ :+ _)
-        .futureValue shouldEqual List(IgnoreExecuted)
+      eventually {
+        projections.ioValue
+          .failures(projId)
+          .runFold(Vector.empty[Fixture.Event]) {
+            case (acc, (ev, _)) => acc :+ ev
+          }
+          .futureValue shouldEqual List(IgnoreExecuted)
+      }
 
       watch(indexer.actor)
-      indexer.stop().runSyncUnsafe()
+      indexer.stop().ioValue
       expectTerminated(indexer.actor)
     }
   }

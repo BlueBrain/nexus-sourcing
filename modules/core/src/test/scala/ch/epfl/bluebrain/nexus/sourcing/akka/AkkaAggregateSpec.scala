@@ -104,8 +104,8 @@ class AkkaAggregateSpec
         val evaluations = new AtomicInteger(0)
         val f = (state: State, cmd: Command) => {
           if (evaluations.get() < failCount)
-            IO.pure(evaluations.incrementAndGet()) *> IO.raiseError(new RuntimeException)
-          else IO.pure(evaluations.incrementAndGet()) *> evaluate[IO](state, cmd)
+            IO.pure(evaluations.incrementAndGet()) >> IO.raiseError(new RuntimeException)
+          else IO.pure(evaluations.incrementAndGet()) >> evaluate[IO](state, cmd)
         }
         (evaluations, f)
       }
@@ -228,8 +228,8 @@ class AkkaAggregateSpec
         val evaluations = new AtomicInteger(0)
         val f = (state: State, cmd: Command) => {
           if (evaluations.get() < failCount)
-            IO.pure(evaluations.incrementAndGet()) *> IO.raiseError(new RuntimeException)
-          else IO.pure(evaluations.incrementAndGet()) *> evaluate[IO](state, cmd)
+            IO.pure(evaluations.incrementAndGet()) >> IO.raiseError(new RuntimeException)
+          else IO.pure(evaluations.incrementAndGet()) >> evaluate[IO](state, cmd)
         }
         (evaluations, f)
       }

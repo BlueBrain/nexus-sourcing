@@ -9,8 +9,7 @@ import org.scalatest.{BeforeAndAfterAll, Suites}
 class CassandraSpec
     extends Suites(
       new SequentialTagIndexerSpec,
-      new ResumableProjectionSpec,
-      new IndexFailuresStorageSpec
+      new ProjectionsSpec,
     )
     with BeforeAndAfterAll {
 

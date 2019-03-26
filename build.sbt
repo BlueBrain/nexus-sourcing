@@ -35,7 +35,6 @@ val catsEffectVersion               = "1.2.0"
 val circeVersion                    = "0.11.1"
 val journalVersion                  = "3.0.19"
 val logbackVersion                  = "1.2.3"
-val monixVersion                    = "3.0.0-RC2"
 val shapelessVersion                = "2.3.3"
 val scalaTestVersion                = "3.0.7"
 val pureconfigVersion               = "0.10.2"
@@ -60,7 +59,6 @@ lazy val circeParser              = "io.circe"                %% "circe-parser" 
 lazy val circeGenericExtras       = "io.circe"                %% "circe-generic-extras"                % circeVersion
 lazy val journal                  = "io.verizon.journal"      %% "core"                                % journalVersion
 lazy val logback                  = "ch.qos.logback"          % "logback-classic"                      % logbackVersion
-lazy val monixEval                = "io.monix"                %% "monix-eval"                          % monixVersion
 lazy val scalaTest                = "org.scalatest"           %% "scalatest"                           % scalaTestVersion
 lazy val commonsTest              = "ch.epfl.bluebrain.nexus" %% "commons-test"                        % commonsVersion
 lazy val pureconfig               = "com.github.pureconfig"   %% "pureconfig"                          % pureconfigVersion
@@ -99,7 +97,6 @@ lazy val stream = project
       circeGenericExtras,
       circeParser,
       journal,
-      monixEval,
       pureconfig,
       shapeless,
       akkaPersistenceLauncher % Test,

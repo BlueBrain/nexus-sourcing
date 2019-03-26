@@ -1,35 +1,39 @@
 package ch.epfl.bluebrain.nexus.sourcing.persistence
 
-import _root_.akka.actor.ActorSystem
-import _root_.akka.testkit.TestKit
+import cats.effect.{IO, Timer}
+import ch.epfl.bluebrain.nexus.sourcing.ActorSystemFixture
 import ch.epfl.bluebrain.nexus.sourcing.persistence.IndexerConfig._
 import ch.epfl.bluebrain.nexus.sourcing.persistence.OffsetStorage._
-import ch.epfl.bluebrain.nexus.sourcing.retry.{Retry, RetryStrategy}
 import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy.{Backoff, Linear}
-import monix.eval.Task
+import ch.epfl.bluebrain.nexus.sourcing.retry.{Retry, RetryStrategy}
 import org.scalactic.Equality
 import org.scalatest.{Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 
-class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with WordSpecLike with Matchers {
+class IndexerConfigSpec
+    extends ActorSystemFixture("IndexerConfigSpec", startCluster = false)
+    with WordSpecLike
+    with Matchers {
+
+  private implicit val timer: Timer[IO] = IO.timer(system.dispatcher)
 
   "A IndexerConfig" should {
-    val indexF: List[String] => Task[Unit]            = _ => Task.unit
-    val initF: Task[Unit]                             = Task.unit
-    val mapProgress: ProjectionProgress => Task[Unit] = _ => Task.unit
-    val strategy: RetryStrategy                       = Linear(0 millis, 2000 hours)
-    val identity: String => Task[Option[String]]      = (v: String) => Task.pure(Some(v))
+    val indexF: List[String] => IO[Unit]            = _ => IO.unit
+    val initF: IO[Unit]                             = IO.unit
+    val mapProgress: ProjectionProgress => IO[Unit] = _ => IO.unit
+    val strategy: RetryStrategy                     = Linear(0 millis, 2000 hours)
+    val identity: String => IO[Option[String]]      = (v: String) => IO.pure(Some(v))
 
-    implicit def eqIndexerConfig[T <: OffsetStorage]: Equality[IndexerConfig[Task, String, String, Throwable, T]] =
-      (a: IndexerConfig[Task, String, String, Throwable, T], b: Any) => {
-        val that = b.asInstanceOf[IndexerConfig[Task, String, String, Throwable, T]]
+    implicit def eqIndexerConfig[T <: OffsetStorage]: Equality[IndexerConfig[IO, String, String, Throwable, T]] =
+      (a: IndexerConfig[IO, String, String, Throwable, T], b: Any) => {
+        val that = b.asInstanceOf[IndexerConfig[IO, String, String, Throwable, T]]
         a.pluginId == that.pluginId && a.batchTo == that.batchTo && a.batch == that.batch && a.init == that.init && a.storage == that.storage && a.tag == that.tag && that.index == a.index && that.mapping == a.mapping
       }
 
     "build a the configuration for index function with persistence" in {
       val storage = Persist(restart = false)
-      val expected: IndexerConfig[Task, String, String, Throwable, Persist] =
+      val expected: IndexerConfig[IO, String, String, Throwable, Persist] =
         IndexerConfig("t",
                       "p",
                       "n",
@@ -42,7 +46,7 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
                       50 millis,
                       Retry(strategy),
                       storage)
-      builder[Task]
+      builder[IO]
         .name("n")
         .plugin("p")
         .tag("t")
@@ -54,7 +58,7 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
 
     "build a the configuration for index function without persistence" in {
       val st = Linear(10 millis, 1 hour)
-      val expected: IndexerConfig[Task, String, String, Throwable, Volatile] =
+      val expected: IndexerConfig[IO, String, String, Throwable, Volatile] =
         IndexerConfig("t",
                       "p",
                       "n",
@@ -67,7 +71,7 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
                       100 millis,
                       Retry(st),
                       Volatile)
-      builder[Task]
+      builder[IO]
         .name("n")
         .plugin("p")
         .tag("t")
@@ -83,7 +87,7 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
     "build from config" in {
       val storage = Persist(restart = false)
       val st      = Backoff(100 millis, 10 hours, 0.5, 7)
-      val expected: IndexerConfig[Task, String, String, Throwable, Persist] =
+      val expected: IndexerConfig[IO, String, String, Throwable, Persist] =
         IndexerConfig("t",
                       "p",
                       "n",
@@ -96,7 +100,7 @@ class IndexerConfigSpec extends TestKit(ActorSystem("IndexerConfigSpec")) with W
                       40 millis,
                       Retry(st),
                       storage)
-      fromConfig[Task]
+      fromConfig[IO]
         .name("n")
         .plugin("p")
         .tag("t")

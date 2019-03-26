@@ -105,7 +105,7 @@ object IndexerConfig {
       error: MonadError[F, Err],
       storage: O) {
 
-    private implicit val F = error
+    private implicit val F: MonadError[F, Err] = error
 
     @silent
     def build(implicit e1: Tag =:= Ready,

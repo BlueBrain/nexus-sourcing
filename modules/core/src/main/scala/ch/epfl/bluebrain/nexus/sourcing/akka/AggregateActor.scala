@@ -320,10 +320,10 @@ private[akka] abstract class AggregateActor[
     val io = eval.onError {
       case th: TimeoutException =>
         log.error(th, s"Timed out while $scope command '{}' on actor '{}'", cmd, persistenceId)
-        IO.shift(context.dispatcher) *> IO(self ! CommandEvaluationTimeout(id, cmd))
+        IO.shift(context.dispatcher) >> IO(self ! CommandEvaluationTimeout(id, cmd))
       case NonFatal(th) =>
         log.error(th, s"Error while $scope command '{}' on actor '{}'", cmd, persistenceId)
-        IO.shift(context.dispatcher) *> IO(self ! CommandEvaluationError(id, cmd, Option(th.getMessage)))
+        IO.shift(context.dispatcher) >> IO(self ! CommandEvaluationError(id, cmd, Option(th.getMessage)))
     }
     io.unsafeRunAsyncAndForget()
   }

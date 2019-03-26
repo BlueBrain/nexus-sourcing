@@ -4,7 +4,7 @@ import ch.epfl.bluebrain.nexus.sourcing.retry.syntax.RetrySyntax.RetryOps
 import ch.epfl.bluebrain.nexus.sourcing.retry.Retry
 
 class RetrySyntax {
-  implicit def retrySyntax[F[_], A](fa: F[A]) = new RetryOps[F, A](fa)
+  implicit def retrySyntax[F[_], A](fa: F[A]): RetryOps[F, A] = new RetryOps[F, A](fa)
 }
 
 object RetrySyntax {

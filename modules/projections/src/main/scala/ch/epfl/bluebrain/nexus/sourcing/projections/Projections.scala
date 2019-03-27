@@ -39,7 +39,7 @@ trait Projections[F[_], E] {
 
   /**
     * Retrieves the progress for the specified projection projectionId. If there is no record of progress
-    * the [[projections.ProjectionProgress.NoProgress]] is returned.
+    * the [[ProjectionProgress.NoProgress]] is returned.
     *
     * @param id an unique projectionId for a projection
     * @return a future progress value for the specified projection projectionId
@@ -66,6 +66,24 @@ trait Projections[F[_], E] {
 }
 
 object Projections {
+
+  /**
+    * Creates a delayed projections module that uses the provided cassandra session.
+    *
+    * @param session the cassandra session used by the projection
+    */
+  def apply[F[_], E: Encoder: Decoder](session: CassandraSession)(implicit as: ActorSystem,
+                                                                  F: Async[F]): F[Projections[F, E]] = {
+    val statements = new Statements(as)
+    val cfg        = lookupConfig(as)
+    ensureInitialized(session, cfg, statements) >> F.delay(new CassandraProjections(session, statements))
+  }
+
+  /**
+    * Creates a delayed projections module. The underlying cassandra session is created automatically.
+    */
+  def apply[F[_], E: Encoder: Decoder](implicit as: ActorSystem, F: Async[F]): F[Projections[F, E]] =
+    createSession[F].flatMap(session => apply(session))
 
   private class Statements(as: ActorSystem) {
     private val journalConfig = as.settings.config.getConfig("cassandra-journal")
@@ -103,10 +121,10 @@ object Projections {
       s"SELECT progress, event from $keyspace.$failuresTable WHERE projectionId = ? ALLOW FILTERING"
   }
 
-  private class CassandraProjections[F[_], E](
+  private class CassandraProjections[F[_], E: Encoder: Decoder](
       session: CassandraSession,
-      stmts: Statements
-  )(implicit F: Async[F], Encoder: Encoder[E], Decoder: Decoder[E])
+      stmts: Statements,
+  )(implicit F: Async[F])
       extends Projections[F, E] {
 
     override def recordProgress(id: String, progress: ProjectionProgress): F[Unit] =
@@ -199,16 +217,4 @@ object Projections {
       _ <- failures(s)
     } yield ()
   }
-
-  def apply[F[_], E: Encoder: Decoder](session: CassandraSession)(implicit as: ActorSystem,
-                                                                  F: Async[F]): F[Projections[F, E]] = {
-    val statements = new Statements(as)
-    val cfg        = lookupConfig(as)
-
-    ensureInitialized(session, cfg, statements) >> F.delay(new CassandraProjections(session, statements))
-  }
-
-  def apply[F[_], E: Encoder: Decoder](implicit as: ActorSystem, F: Async[F]): F[Projections[F, E]] =
-    createSession[F].flatMap(session => apply(session))
-
 }

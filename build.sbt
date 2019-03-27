@@ -26,24 +26,22 @@ scalafmt: {
 
 // Dependency versions
 val akkaVersion                     = "2.5.21"
-val akkaHttpVersion                 = "10.1.7"
-val akkaPersistenceCassandraVersion = "0.92"
+val akkaHttpVersion                 = "10.1.8"
+val akkaPersistenceCassandraVersion = "0.93"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val catsVersion                     = "1.6.0"
-val commonsVersion                  = "0.11.1"
+val commonsVersion                  = "0.11.8"
 val catsEffectVersion               = "1.2.0"
 val circeVersion                    = "0.11.1"
 val journalVersion                  = "3.0.19"
 val logbackVersion                  = "1.2.3"
-val monixVersion                    = "3.0.0-RC2"
 val shapelessVersion                = "2.3.3"
-val scalaTestVersion                = "3.0.5"
+val scalaTestVersion                = "3.0.7"
 val pureconfigVersion               = "0.10.2"
 
 // Dependency modules
 lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion
 lazy val catsEffect               = "org.typelevel"           %% "cats-effect"                         % catsEffectVersion
-lazy val shapeless                = "com.chuusai"             %% "shapeless"                           % shapelessVersion
 lazy val akkaActor                = "com.typesafe.akka"       %% "akka-actor"                          % akkaVersion
 lazy val akkaCluster              = "com.typesafe.akka"       %% "akka-cluster"                        % akkaVersion
 lazy val akkaClusterSharding      = "com.typesafe.akka"       %% "akka-cluster-sharding"               % akkaVersion
@@ -60,7 +58,6 @@ lazy val circeParser              = "io.circe"                %% "circe-parser" 
 lazy val circeGenericExtras       = "io.circe"                %% "circe-generic-extras"                % circeVersion
 lazy val journal                  = "io.verizon.journal"      %% "core"                                % journalVersion
 lazy val logback                  = "ch.qos.logback"          % "logback-classic"                      % logbackVersion
-lazy val monixEval                = "io.monix"                %% "monix-eval"                          % monixVersion
 lazy val scalaTest                = "org.scalatest"           %% "scalatest"                           % scalaTestVersion
 lazy val commonsTest              = "ch.epfl.bluebrain.nexus" %% "commons-test"                        % commonsVersion
 lazy val pureconfig               = "com.github.pureconfig"   %% "pureconfig"                          % pureconfigVersion
@@ -86,11 +83,11 @@ lazy val core = project
   )
 
 lazy val stream = project
-  .in(file("modules/stream"))
+  .in(file("modules/projections"))
   .dependsOn(core)
   .settings(
-    name       := "sourcing-stream",
-    moduleName := "sourcing-stream",
+    name       := "sourcing-projections",
+    moduleName := "sourcing-projections",
     libraryDependencies ++= Seq(
       akkaActor,
       akkaCluster,
@@ -99,9 +96,7 @@ lazy val stream = project
       circeGenericExtras,
       circeParser,
       journal,
-      monixEval,
       pureconfig,
-      shapeless,
       akkaPersistenceLauncher % Test,
       akkaTestKit             % Test,
       akkaHttpTestKit         % Test,

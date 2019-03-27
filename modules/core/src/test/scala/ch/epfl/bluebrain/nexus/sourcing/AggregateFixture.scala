@@ -30,16 +30,16 @@ object AggregateFixture {
       case (Initial, Increment(rev, step)) if rev == 0             => F.pure(Right(Incremented(1, step)))
       case (Initial, Increment(rev, _))                            => F.pure(Left(InvalidRevision(rev)))
       case (Initial, IncrementAsync(rev, step, duration)) if rev == 0 =>
-        T.sleep(duration) *> F.pure(Right(Incremented(1, step)))
+        T.sleep(duration) >> F.pure(Right(Incremented(1, step)))
       case (Initial, IncrementAsync(rev, _, _))                      => F.pure(Left(InvalidRevision(rev)))
       case (Initial, Initialize(rev)) if rev == 0                    => F.pure(Right(Initialized(1)))
       case (Initial, Initialize(rev))                                => F.pure(Left(InvalidRevision(rev)))
       case (Current(revS, _), Increment(revC, step)) if revS == revC => F.pure(Right(Incremented(revS + 1, step)))
       case (Current(_, _), Increment(revC, _))                       => F.pure(Left(InvalidRevision(revC)))
       case (Current(revS, _), IncrementAsync(revC, step, duration)) if revS == revC =>
-        T.sleep(duration) *> F.pure(Right(Incremented(revS + 1, step)))
+        T.sleep(duration) >> F.pure(Right(Incremented(revS + 1, step)))
       case (Current(_, _), IncrementAsync(revC, _, duration)) =>
-        T.sleep(duration) *> F.pure(Left(InvalidRevision(revC)))
+        T.sleep(duration) >> F.pure(Left(InvalidRevision(revC)))
       case (Current(revS, _), Initialize(revC)) if revS == revC => F.pure(Right(Initialized(revS + 1)))
       case (Current(_, _), Initialize(rev))                     => F.pure(Left(InvalidRevision(rev)))
     }

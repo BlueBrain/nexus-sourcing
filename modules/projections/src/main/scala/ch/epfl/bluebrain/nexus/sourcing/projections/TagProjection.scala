@@ -71,12 +71,24 @@ object TagProjection {
       implicit as: ActorSystem,
       sourcingConfig: SourcingConfig,
       F: Effect[F],
-  ): F[StreamSupervisor[F, ProjectionProgress]] = {
+  ): StreamSupervisor[F, ProjectionProgress] = {
     val tagProjection: TagProjection[F, ProjectionProgress] = new VolatileTagProjection(config)
-    F.delay {
-      StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
-    }
+    StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
   }
+
+  /**
+    * Generic tag projection that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are NOT persisted once computed the index function.
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  // $COVERAGE-OFF$
+  final def delay[F[_], Event: ClassTag, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
+      implicit as: ActorSystem,
+      sourcingConfig: SourcingConfig,
+      F: Effect[F],
+  ): F[StreamSupervisor[F, ProjectionProgress]] =
+    F.delay(start(config))
 
   /**
     * Generic tag projection that iterates over the collection of events selected via the specified tag.
@@ -89,12 +101,25 @@ object TagProjection {
       as: ActorSystem,
       sourcingConfig: SourcingConfig,
       F: Effect[F],
-  ): F[StreamSupervisor[F, ProjectionProgress]] = {
+  ): StreamSupervisor[F, ProjectionProgress] = {
     val tagProjection: TagProjection[F, ProjectionProgress] = new PersistentTagProjection(config)
-    F.delay {
-      StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
-    }
+    StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
   }
+
+  /**
+    * Generic tag projection that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are persisted once computed the index function.
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  final def delay[F[_], Event: ClassTag, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Persist])(
+      implicit projections: Projections[F, Event],
+      as: ActorSystem,
+      sourcingConfig: SourcingConfig,
+      F: Effect[F],
+  ): F[StreamSupervisor[F, ProjectionProgress]] =
+    F.delay(start(config))
+
   // $COVERAGE-ON$
 
   abstract class BatchedTagProjection[F[_], Event, MappedEvt, Err, O <: ProgressStorage](

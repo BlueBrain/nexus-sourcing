@@ -173,6 +173,17 @@ object StreamSupervisor {
     new StreamSupervisor[F, A](as.actorOf(props(init, source), name))
 
   /**
+    * Builds a [[StreamSupervisor]].
+    *
+    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
+    * @param source an initialization function that produces a stream from an initial start value
+    */
+  final def delay[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
+      implicit as: ActorSystem,
+      config: SourcingConfig): F[StreamSupervisor[F, A]] =
+    Effect[F].delay(start(init, source, name))
+
+  /**
     * Builds a [[Props]] for a [[StreamSupervisorActor]] with it cluster singleton configuration.
     *
     * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
@@ -194,5 +205,16 @@ object StreamSupervisor {
       implicit as: ActorSystem,
       config: SourcingConfig): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](as.actorOf(singletonProps(init, source), name))
+
+  /**
+    * Builds a  [[StreamSupervisor]] based on a cluster singleton actor.
+    *
+    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
+    * @param source an initialization function that produces a stream from an initial start value
+    */
+  final def delaySingleton[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
+      implicit as: ActorSystem,
+      config: SourcingConfig): F[StreamSupervisor[F, A]] =
+    Effect[F].delay(startSingleton(init, source, name))
   // $COVERAGE-ON$
 }

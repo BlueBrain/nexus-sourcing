@@ -25,19 +25,19 @@ scalafmt: {
  */
 
 // Dependency versions
-val akkaVersion                     = "2.5.22"
+val akkaVersion                     = "2.5.23"
 val akkaHttpVersion                 = "10.1.8"
-val akkaPersistenceCassandraVersion = "0.93"
+val akkaPersistenceCassandraVersion = "0.97"
 val akkaPersistenceInMemVersion     = "2.5.1.1"
 val catsVersion                     = "1.6.0"
-val commonsVersion                  = "0.11.8"
-val catsEffectVersion               = "1.2.0"
+val commonsVersion                  = "0.12.6"
+val catsEffectVersion               = "1.3.0"
 val circeVersion                    = "0.11.1"
 val journalVersion                  = "3.0.19"
 val logbackVersion                  = "1.2.3"
 val shapelessVersion                = "2.3.3"
 val scalaTestVersion                = "3.0.7"
-val pureconfigVersion               = "0.10.2"
+val pureconfigVersion               = "0.11.0"
 
 // Dependency modules
 lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion

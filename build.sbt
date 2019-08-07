@@ -26,18 +26,18 @@ scalafmt: {
 
 // Dependency versions
 val akkaVersion                     = "2.5.23"
-val akkaHttpVersion                 = "10.1.8"
-val akkaPersistenceCassandraVersion = "0.98"
-val akkaPersistenceInMemVersion     = "2.5.1.1"
+val akkaHttpVersion                 = "10.1.9"
+val akkaPersistenceCassandraVersion = "0.99"
+val akkaPersistenceInMemVersion     = "2.5.15.2"
 val catsVersion                     = "1.6.1"
-val commonsVersion                  = "0.12.8"
-val catsEffectVersion               = "1.3.1"
+val commonsVersion                  = "0.17.2"
+val catsEffectVersion               = "1.4.0"
 val circeVersion                    = "0.11.1"
 val journalVersion                  = "3.0.19"
 val logbackVersion                  = "1.2.3"
 val shapelessVersion                = "2.3.3"
-val scalaTestVersion                = "3.0.7"
-val pureconfigVersion               = "0.11.0"
+val scalaTestVersion                = "3.0.8"
+val pureconfigVersion               = "0.11.1"
 
 // Dependency modules
 lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion
@@ -103,7 +103,7 @@ lazy val stream = project
       akkaSlf4j               % Test,
       commonsTest             % Test,
       pureconfig              % Test,
-      scalaTest               % Test,
+      scalaTest               % Test
     )
   )
 
@@ -123,7 +123,7 @@ lazy val root = project
 lazy val noPublish = Seq(
   publishLocal    := {},
   publish         := {},
-  publishArtifact := false,
+  publishArtifact := false
 )
 
 inThisBuild(
@@ -135,12 +135,13 @@ inThisBuild(
       Developer("bogdanromanx", "Bogdan Roman", "noreply@epfl.ch", url("https://bluebrain.epfl.ch/")),
       Developer("hygt", "Henry Genet", "noreply@epfl.ch", url("https://bluebrain.epfl.ch/")),
       Developer("umbreak", "Didac Montero Mendez", "noreply@epfl.ch", url("https://bluebrain.epfl.ch/")),
-      Developer("wwajerowicz", "Wojtek Wajerowicz", "noreply@epfl.ch", url("https://bluebrain.epfl.ch/")),
+      Developer("wwajerowicz", "Wojtek Wajerowicz", "noreply@epfl.ch", url("https://bluebrain.epfl.ch/"))
     ),
     // These are the sbt-release-early settings to configure
     releaseEarlyWith              := BintrayPublisher,
     releaseEarlyNoGpg             := true,
-    releaseEarlyEnableSyncToMaven := false,
-  ))
+    releaseEarlyEnableSyncToMaven := false
+  )
+)
 
 addCommandAlias("review", ";clean;scalafmtCheck;test:scalafmtCheck;scalafmtSbtCheck;coverage;scapegoat;test;coverageReport;coverageAggregate")

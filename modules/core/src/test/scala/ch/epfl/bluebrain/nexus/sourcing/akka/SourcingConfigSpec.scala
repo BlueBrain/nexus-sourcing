@@ -37,10 +37,12 @@ class SourcingConfigSpec
     }
 
     "return AkkaSourcingConfig" in {
-      config.akkaSourcingConfig shouldEqual AkkaSourcingConfig(10 second,
-                                                               "inmemory-journal",
-                                                               5 seconds,
-                                                               ExecutionContext.global)
+      config.akkaSourcingConfig shouldEqual AkkaSourcingConfig(
+        10 second,
+        "inmemory-journal",
+        5 seconds,
+        ExecutionContext.global
+      )
     }
     "return passivation strategy" in {
       val strategy = config.passivationStrategy()

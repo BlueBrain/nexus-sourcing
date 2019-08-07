@@ -70,7 +70,7 @@ object TagProjection {
   final def start[F[_], Event: ClassTag, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
       implicit as: ActorSystem,
       sourcingConfig: SourcingConfig,
-      F: Effect[F],
+      F: Effect[F]
   ): StreamSupervisor[F, ProjectionProgress] = {
     val tagProjection: TagProjection[F, ProjectionProgress] = new VolatileTagProjection(config)
     StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
@@ -86,7 +86,7 @@ object TagProjection {
   final def delay[F[_], Event: ClassTag, MappedEvt, Err](config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile])(
       implicit as: ActorSystem,
       sourcingConfig: SourcingConfig,
-      F: Effect[F],
+      F: Effect[F]
   ): F[StreamSupervisor[F, ProjectionProgress]] =
     F.delay(start(config))
 
@@ -100,7 +100,7 @@ object TagProjection {
       implicit projections: Projections[F, Event],
       as: ActorSystem,
       sourcingConfig: SourcingConfig,
-      F: Effect[F],
+      F: Effect[F]
   ): StreamSupervisor[F, ProjectionProgress] = {
     val tagProjection: TagProjection[F, ProjectionProgress] = new PersistentTagProjection(config)
     StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
@@ -116,14 +116,15 @@ object TagProjection {
       implicit projections: Projections[F, Event],
       as: ActorSystem,
       sourcingConfig: SourcingConfig,
-      F: Effect[F],
+      F: Effect[F]
   ): F[StreamSupervisor[F, ProjectionProgress]] =
     F.delay(start(config))
 
   // $COVERAGE-ON$
 
   abstract class BatchedTagProjection[F[_], Event, MappedEvt, Err, O <: ProgressStorage](
-      config: ProjectionConfig[F, Event, MappedEvt, Err, O])(implicit F: Effect[F], T: ClassTag[Event], as: ActorSystem)
+      config: ProjectionConfig[F, Event, MappedEvt, Err, O]
+  )(implicit F: Effect[F], T: ClassTag[Event], as: ActorSystem)
       extends TagProjection[F, ProjectionProgress] {
 
     private[sourcing] implicit val log: LoggingAdapter  = Logging(as, TagProjection.getClass)
@@ -131,7 +132,8 @@ object TagProjection {
     private[sourcing] type IdentifiedEvent = (String, Event, MappedEvt)
 
     private[sourcing] def batchedSource(
-        initialProgress: ProjectionProgress): Source[(ProjectionProgress, List[IdentifiedEvent]), NotUsed] = {
+        initialProgress: ProjectionProgress
+    ): Source[(ProjectionProgress, List[IdentifiedEvent]), NotUsed] = {
       config.mapInitialProgress(initialProgress).toIO.unsafeRunSync()
       PersistenceQuery(as)
         .readJournalFor[EventsByTagQuery](config.pluginId)
@@ -143,15 +145,19 @@ object TagProjection {
         }
         .scan((initialProgress, None: Option[String], None: Option[Event], None: Option[MappedEvt])) {
           case ((progress, _, _, _), (envelope, Some(event), Some(mappedEvt))) =>
-            (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount),
-             Some(envelope.persistenceId),
-             Some(event),
-             Some(mappedEvt))
+            (
+              OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount),
+              Some(envelope.persistenceId),
+              Some(event),
+              Some(mappedEvt)
+            )
           case ((progress, _, _, _), (envelope, eventOpt, mappedOpt)) =>
-            (OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount + 1),
-             Some(envelope.persistenceId),
-             eventOpt,
-             mappedOpt)
+            (
+              OffsetProgress(envelope.offset, progress.processedCount + 1, progress.discardedCount + 1),
+              Some(envelope.persistenceId),
+              eventOpt,
+              mappedOpt
+            )
         }
         .flatMapConcat {
           case (progress, Some(id), eventOpt, mappedOpt) => Source.single((progress, id, eventOpt, mappedOpt))
@@ -167,8 +173,10 @@ object TagProjection {
       envelope.event match {
         case T(casted) => (envelope, Some(casted))
         case _ =>
-          log.warning("Some of the Events on the list are not compatible with type '{}', skipping...",
-                      T.runtimeClass.getSimpleName)
+          log.warning(
+            "Some of the Events on the list are not compatible with type '{}', skipping...",
+            T.runtimeClass.getSimpleName
+          )
           (envelope, None)
       }
     }
@@ -180,31 +188,37 @@ object TagProjection {
         .map {
           case Some(evtMapped) => (env, Some(event): Option[Event], Some(evtMapped))
           case None =>
-            log.debug("Mapping event with id '{}' and value '{}' failed '{}'",
-                      env.persistenceId,
-                      event,
-                      "Mapping failed")
+            log.debug(
+              "Mapping event with id '{}' and value '{}' failed '{}'",
+              env.persistenceId,
+              event,
+              "Mapping failed"
+            )
             (env, Some(event), None)
         }
         .recoverWith(logError(env, event))
         .toIO
         .unsafeToFuture()
 
-    private def mapBatchOffset(batched: Seq[(ProjectionProgress, String, Option[Event], Option[MappedEvt])])
-      : (ProjectionProgress, List[(String, Event, MappedEvt)]) = {
+    private def mapBatchOffset(
+        batched: Seq[(ProjectionProgress, String, Option[Event], Option[MappedEvt])]
+    ): (ProjectionProgress, List[(String, Event, MappedEvt)]) = {
       val progress = batched.lastOption.map { case (off, _, _, _) => off }.getOrElse(NoProgress)
       (progress, batched.collect { case (_, id, Some(event), Some(mappedEvent)) => (id, event, mappedEvent) }.toList)
     }
 
     private def logError(
         env: EventEnvelope,
-        event: Event): PartialFunction[Throwable, F[(EventEnvelope, Option[Event], Option[MappedEvt])]] = {
+        event: Event
+    ): PartialFunction[Throwable, F[(EventEnvelope, Option[Event], Option[MappedEvt])]] = {
       case err =>
-        log.error(err,
-                  "Indexing event with id '{}' and value '{}' failed '{}'",
-                  env.persistenceId,
-                  event,
-                  err.getMessage)
+        log.error(
+          err,
+          "Indexing event with id '{}' and value '{}' failed '{}'",
+          env.persistenceId,
+          event,
+          err.getMessage
+        )
         F.pure((env, Some(event), None))
     }
 
@@ -251,8 +265,10 @@ object TagProjection {
     private def storeProgress(progress: ProjectionProgress): Future[ProjectionProgress] =
       projections.recordProgress(config.name, progress).retry.map(_ => progress).toIO.unsafeToFuture()
 
-    private def recoverIndex(progress: ProjectionProgress,
-                             events: List[IdentifiedEvent]): PartialFunction[Throwable, F[Unit]] = {
+    private def recoverIndex(
+        progress: ProjectionProgress,
+        events: List[IdentifiedEvent]
+    ): PartialFunction[Throwable, F[Unit]] = {
       case err =>
         events.traverse {
           case (id, event, _) =>

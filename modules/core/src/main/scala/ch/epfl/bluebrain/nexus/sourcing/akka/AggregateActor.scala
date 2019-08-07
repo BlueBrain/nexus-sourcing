@@ -46,7 +46,7 @@ private[akka] abstract class AggregateActor[
     next: (State, Event) => State,
     evaluate: (State, Command) => F[Either[Rejection, Event]],
     passivationStrategy: PassivationStrategy[State, Command],
-    config: AkkaSourcingConfig,
+    config: AkkaSourcingConfig
 ) extends PersistentActor
     with Stash
     with ActorLogging {
@@ -72,9 +72,11 @@ private[akka] abstract class AggregateActor[
     log.debug("AggregateActor with id '{}' started", persistenceId)
     passivationStrategy.lapsedSinceLastInteraction.foreach { duration =>
       context.setReceiveTimeout(duration)
-      log.debug("Configured actor with id '{}' to passivate after '{}' seconds of inactivity",
-                persistenceId,
-                duration.toSeconds)
+      log.debug(
+        "Configured actor with id '{}' to passivate after '{}' seconds of inactivity",
+        persistenceId,
+        duration.toSeconds
+      )
     }
   }
 
@@ -93,10 +95,12 @@ private[akka] abstract class AggregateActor[
       log.debug("Applied event '{}' to actor '{}'", ev, persistenceId)
     case other =>
       // $COVERAGE-OFF$
-      log.error("Unknown message '{}' during recovery of actor '{}', expected message of type '{}'",
-                other,
-                persistenceId,
-                Event.runtimeClass.getSimpleName)
+      log.error(
+        "Unknown message '{}' during recovery of actor '{}', expected message of type '{}'",
+        other,
+        persistenceId,
+        Event.runtimeClass.getSimpleName
+      )
     // $COVERAGE-ON$
   }
 
@@ -112,9 +116,11 @@ private[akka] abstract class AggregateActor[
           }
         // $COVERAGE-OFF$
         case _ =>
-          log.error("Received an event '{}' incompatible with the expected type '{}'",
-                    value,
-                    Event.runtimeClass.getSimpleName)
+          log.error(
+            "Received an event '{}' incompatible with the expected type '{}'",
+            value,
+            Event.runtimeClass.getSimpleName
+          )
           sender() ! TypeError(id, Event.runtimeClass.getSimpleName, value)
           passivateAfterEvaluation()
         // $COVERAGE-ON$
@@ -135,9 +141,11 @@ private[akka] abstract class AggregateActor[
           context.become(evaluating(cmd, sender()))
         // $COVERAGE-OFF$
         case _ =>
-          log.error("Received a command '{}' incompatible with the expected type '{}'",
-                    value,
-                    Command.runtimeClass.getSimpleName)
+          log.error(
+            "Received a command '{}' incompatible with the expected type '{}'",
+            value,
+            Command.runtimeClass.getSimpleName
+          )
           sender() ! TypeError(id, Command.runtimeClass.getSimpleName, value)
           passivateAfterEvaluation()
         // $COVERAGE-ON$
@@ -151,9 +159,11 @@ private[akka] abstract class AggregateActor[
           context.become(testing(cmd, sender()))
         // $COVERAGE-OFF$
         case _ =>
-          log.error("Received a command '{}' incompatible with the expected type '{}'",
-                    value,
-                    Command.runtimeClass.getSimpleName)
+          log.error(
+            "Received a command '{}' incompatible with the expected type '{}'",
+            value,
+            Command.runtimeClass.getSimpleName
+          )
           sender() ! TypeError(id, Command.runtimeClass.getSimpleName, value)
           passivateAfterEvaluation()
         // $COVERAGE-ON$
@@ -382,7 +392,7 @@ private[akka] class ChildAggregateActor[
     next: (State, Event) => State,
     evaluate: (State, Command) => F[Either[Rejection, Event]],
     passivationStrategy: PassivationStrategy[State, Command],
-    config: AkkaSourcingConfig,
+    config: AkkaSourcingConfig
 ) extends AggregateActor[
       F,
       Event,
@@ -415,7 +425,7 @@ private[akka] class ShardedAggregateActor[
     next: (State, Event) => State,
     evaluate: (State, Command) => F[Either[Rejection, Event]],
     passivationStrategy: PassivationStrategy[State, Command],
-    config: AkkaSourcingConfig,
+    config: AkkaSourcingConfig
 ) extends AggregateActor[
       F,
       Event,
@@ -470,7 +480,7 @@ object AggregateActor {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig,
+      config: AkkaSourcingConfig
   )(id: String): Props =
     Props(new ChildAggregateActor(id, name, initialState, next, evaluate, passivationStrategy, config))
 

@@ -72,8 +72,9 @@ object Projections {
     *
     * @param session the cassandra session used by the projection
     */
-  def apply[F[_], E: Encoder: Decoder](session: CassandraSession)(implicit as: ActorSystem,
-                                                                  F: Async[F]): F[Projections[F, E]] = {
+  def apply[F[_], E: Encoder: Decoder](
+      session: CassandraSession
+  )(implicit as: ActorSystem, F: Async[F]): F[Projections[F, E]] = {
     val statements = new Statements(as)
     val cfg        = lookupConfig(as)
     ensureInitialized(session, cfg, statements) >> F.delay(new CassandraProjections(session, statements))
@@ -123,7 +124,7 @@ object Projections {
 
   private class CassandraProjections[F[_], E: Encoder: Decoder](
       session: CassandraSession,
-      stmts: Statements,
+      stmts: Statements
   )(implicit F: Async[F])
       extends Projections[F, E] {
 
@@ -138,12 +139,15 @@ object Projections {
 
     override def recordFailure(id: String, persistenceId: String, progress: ProjectionProgress, event: E): F[Unit] =
       wrapFuture(
-        session.executeWrite(stmts.recordFailureQuery,
-                             id,
-                             toOffset(progress),
-                             persistenceId,
-                             progress.asJson.noSpaces,
-                             event.asJson.noSpaces)) >> F.unit
+        session.executeWrite(
+          stmts.recordFailureQuery,
+          id,
+          toOffset(progress),
+          persistenceId,
+          progress.asJson.noSpaces,
+          event.asJson.noSpaces
+        )
+      ) >> F.unit
 
     override def failures(id: String): Source[(E, ProjectionProgress), _] =
       session
@@ -193,7 +197,8 @@ object Projections {
 
   private def ensureInitialized[F[_]](session: CassandraSession, cfg: CassandraPluginConfig, stmts: Statements)(
       implicit as: ActorSystem,
-      F: Async[F]): F[Unit] = {
+      F: Async[F]
+  ): F[Unit] = {
     implicit val ec: ExecutionContextExecutor = as.dispatcher
 
     val underlying = wrapFuture(session.underlying())

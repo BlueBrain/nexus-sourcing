@@ -41,7 +41,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
     override val name: String,
     selection: ActorRefSelection[F],
     retry: Retry[F, Throwable],
-    config: AkkaSourcingConfig,
+    config: AkkaSourcingConfig
 )(implicit as: ActorSystem, mat: ActorMaterializer)
     extends Aggregate[F, String, Event, State, Command, Rejection] {
 
@@ -132,11 +132,13 @@ final class AggregateTree[F[_]] {
       passivationStrategy: PassivationStrategy[State, Command],
       retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
-      poolSize: Int,
-  )(implicit
-    F: Effect[F],
-    as: ActorSystem,
-    mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] =
+      poolSize: Int
+  )(
+      implicit
+      F: Effect[F],
+      as: ActorSystem,
+      mat: ActorMaterializer
+  ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
     AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, retry, config, poolSize)
 }
 
@@ -177,19 +179,23 @@ final class AggregateSharded[F[_]] {
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
-  )(implicit
-    F: Effect[F],
-    as: ActorSystem,
-    mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] =
-    AkkaAggregate.shardedF(name,
-                           initialState,
-                           next,
-                           evaluate,
-                           passivationStrategy,
-                           retry,
-                           config,
-                           shards,
-                           shardingSettings)
+  )(
+      implicit
+      F: Effect[F],
+      as: ActorSystem,
+      mat: ActorMaterializer
+  ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
+    AkkaAggregate.shardedF(
+      name,
+      initialState,
+      next,
+      evaluate,
+      passivationStrategy,
+      retry,
+      config,
+      shards,
+      shardingSettings
+    )
 }
 
 object AkkaAggregate {
@@ -237,7 +243,7 @@ object AkkaAggregate {
       passivationStrategy: PassivationStrategy[State, Command],
       retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
-      poolSize: Int,
+      poolSize: Int
   )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val F = implicitly[Effect[F]]
     F.delay {

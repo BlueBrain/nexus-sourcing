@@ -8,7 +8,7 @@ import org.scalatest.{BeforeAndAfterAll, Suites}
 class CassandraSpec
     extends Suites(
       new TagProjectionSpec,
-      new ProjectionsSpec,
+      new ProjectionsSpec
     )
     with BeforeAndAfterAll {
 

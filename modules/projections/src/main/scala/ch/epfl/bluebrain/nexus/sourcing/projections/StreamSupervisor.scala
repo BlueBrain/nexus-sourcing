@@ -96,16 +96,19 @@ object StreamSupervisor {
             log.info(
               "Received initial start value of type '{}', with value '{}' running the indexing function across the element stream",
               A.runtimeClass.getSimpleName,
-              a)
+              a
+            )
             state = Some(a)
             val (killSwitch, doneFuture) = buildStream(a).run()
             doneFuture pipeTo self
             context.become(running(killSwitch))
           // $COVERAGE-OFF$
           case _ =>
-            log.error("Received unknown initial start value '{}', expecting type '{}', stopping",
-                      any,
-                      A.runtimeClass.getSimpleName)
+            log.error(
+              "Received unknown initial start value '{}', expecting type '{}', stopping",
+              any,
+              A.runtimeClass.getSimpleName
+            )
             context.stop(self)
           // $COVERAGE-ON$
         }
@@ -169,7 +172,8 @@ object StreamSupervisor {
     */
   final def start[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
       implicit as: ActorSystem,
-      config: SourcingConfig): StreamSupervisor[F, A] =
+      config: SourcingConfig
+  ): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](as.actorOf(props(init, source), name))
 
   /**
@@ -180,7 +184,8 @@ object StreamSupervisor {
     */
   final def delay[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
       implicit as: ActorSystem,
-      config: SourcingConfig): F[StreamSupervisor[F, A]] =
+      config: SourcingConfig
+  ): F[StreamSupervisor[F, A]] =
     Effect[F].delay(start(init, source, name))
 
   /**
@@ -190,10 +195,13 @@ object StreamSupervisor {
     * @param source an initialization function that produces a stream from an initial start value
     */
   final def singletonProps[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _])(
-      implicit as: ActorSystem): Props =
-    ClusterSingletonManager.props(Props(new StreamSupervisorActor(init, source)),
-                                  terminationMessage = Stop,
-                                  settings = ClusterSingletonManagerSettings(as))
+      implicit as: ActorSystem
+  ): Props =
+    ClusterSingletonManager.props(
+      Props(new StreamSupervisorActor(init, source)),
+      terminationMessage = Stop,
+      settings = ClusterSingletonManagerSettings(as)
+    )
 
   /**
     * Builds a  [[StreamSupervisor]] based on a cluster singleton actor.
@@ -203,7 +211,8 @@ object StreamSupervisor {
     */
   final def startSingleton[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
       implicit as: ActorSystem,
-      config: SourcingConfig): StreamSupervisor[F, A] =
+      config: SourcingConfig
+  ): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](as.actorOf(singletonProps(init, source), name))
 
   /**
@@ -214,7 +223,8 @@ object StreamSupervisor {
     */
   final def delaySingleton[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
       implicit as: ActorSystem,
-      config: SourcingConfig): F[StreamSupervisor[F, A]] =
+      config: SourcingConfig
+  ): F[StreamSupervisor[F, A]] =
     Effect[F].delay(startSingleton(init, source, name))
   // $COVERAGE-ON$
 }

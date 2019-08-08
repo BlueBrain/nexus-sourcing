@@ -13,7 +13,9 @@ import scala.concurrent.duration.FiniteDuration
   * @param commandEvaluationMaxDuration      the maximum amount of time allowed for a command to evaluate before cancelled
   * @param commandEvaluationExecutionContext the execution context where command evaluation is executed
   */
-final case class AkkaSourcingConfig(askTimeout: Timeout,
-                                    readJournalPluginId: String,
-                                    commandEvaluationMaxDuration: FiniteDuration,
-                                    commandEvaluationExecutionContext: ExecutionContext)
+final case class AkkaSourcingConfig(
+    askTimeout: Timeout,
+    readJournalPluginId: String,
+    commandEvaluationMaxDuration: FiniteDuration,
+    commandEvaluationExecutionContext: ExecutionContext
+)

@@ -49,7 +49,8 @@ final case class ProjectionConfig[F[_], Event, MappedEvt, Err, O <: ProgressStor
     batch: Int,
     batchTo: FiniteDuration,
     retry: Retry[F, Err],
-    storage: O)
+    storage: O
+)
 
 /**
   *
@@ -82,16 +83,7 @@ object ProjectionConfig {
   private sealed trait Ready
 
   @SuppressWarnings(Array("UnusedMethodParameter"))
-  private[ProjectionConfig] final case class ProjectionConfigBuilder[F[_]: Timer,
-                                                                     Event,
-                                                                     MappedEvt,
-                                                                     Tag,
-                                                                     Plugin,
-                                                                     Name,
-                                                                     Index,
-                                                                     Mapping,
-                                                                     Err,
-                                                                     O <: ProgressStorage](
+  private[ProjectionConfig] final case class ProjectionConfigBuilder[F[_]: Timer, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O <: ProgressStorage](
       tag: Option[String] = None,
       plugin: Option[String] = None,
       name: Option[String] = None,
@@ -104,16 +96,19 @@ object ProjectionConfig {
       batchTo: FiniteDuration = 50 millis,
       strategy: RetryStrategy = Linear(0 millis, 2000 hours),
       error: MonadError[F, Err],
-      storage: O) {
+      storage: O
+  ) {
 
     private implicit val F: MonadError[F, Err] = error
 
     @silent
-    def build(implicit e1: Tag =:= Ready,
-              e2: Plugin =:= Ready,
-              e3: Name =:= Ready,
-              e4: Index =:= Ready,
-              e5: Mapping =:= Ready): ProjectionConfig[F, Event, MappedEvt, Err, O] =
+    def build(
+        implicit e1: Tag =:= Ready,
+        e2: Plugin =:= Ready,
+        e3: Name =:= Ready,
+        e4: Index =:= Ready,
+        e5: Mapping =:= Ready
+    ): ProjectionConfig[F, Event, MappedEvt, Err, O] =
       (tag, plugin, name, index, mapping) match {
         case (Some(t), Some(p), Some(n), Some(i), Some(m)) =>
           ProjectionConfig(
@@ -149,39 +144,48 @@ object ProjectionConfig {
     def init(value: F[Unit]): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
       copy(init = value)
 
-    def index(value: List[MappedEvt] => F[Unit])(implicit @silent ev: Mapping =:= Ready)
-      : ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Ready, Mapping, Err, O] =
+    def index(value: List[MappedEvt] => F[Unit])(
+        implicit @silent ev: Mapping =:= Ready
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Ready, Mapping, Err, O] =
       copy(index = Some(value))
 
-    def mapInitialProgress(value: ProjectionProgress => F[Unit])
-      : ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
+    def mapInitialProgress(
+        value: ProjectionProgress => F[Unit]
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
       copy(mapInitialProgress = Some(value))
 
-    def mapProgress(value: ProjectionProgress => F[Unit])
-      : ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
+    def mapProgress(
+        value: ProjectionProgress => F[Unit]
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
       copy(mapProgress = Some(value))
 
     def mapping[TT, TTO](
-        value: TT => F[Option[TTO]]): ProjectionConfigBuilder[F, TT, TTO, Tag, Plugin, Name, Index, Ready, Err, O] =
+        value: TT => F[Option[TTO]]
+    ): ProjectionConfigBuilder[F, TT, TTO, Tag, Plugin, Name, Index, Ready, Err, O] =
       copy(mapping = Some(value), index = None)
 
     def offset[S <: ProgressStorage](
-        value: S): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, S] =
+        value: S
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, S] =
       copy(storage = value)
 
     def batch(value: Int): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
       copy(batch = value)
 
-    def batch(value: Int, timeout: FiniteDuration)
-      : ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
+    def batch(
+        value: Int,
+        timeout: FiniteDuration
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
       copy(batch = value, batchTo = timeout)
 
-    def retry[EE](strategy: RetryStrategy)(implicit EE: MonadError[F, EE])
-      : ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, EE, O] =
+    def retry[EE](strategy: RetryStrategy)(
+        implicit EE: MonadError[F, EE]
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, EE, O] =
       copy(error = EE, strategy = strategy)
 
-    def restart(value: Boolean)(implicit @silent ev: O =:= Persist)
-      : ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, Persist] =
+    def restart(value: Boolean)(
+        implicit @silent ev: O =:= Persist
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, Persist] =
       copy(storage = Persist(value))
 
   }
@@ -189,8 +193,9 @@ object ProjectionConfig {
   /**
     * Retrieves the [[ProjectionConfigBuilder]] with the default pre-filled arguments.
     */
-  def builder[F[_]: Timer](implicit F: MonadError[F, Throwable])
-    : ProjectionConfigBuilder[F, NotUsed, NotUsed, _, _, _, _, _, Throwable, Persist] =
+  def builder[F[_]: Timer](
+      implicit F: MonadError[F, Throwable]
+  ): ProjectionConfigBuilder[F, NotUsed, NotUsed, _, _, _, _, _, Throwable, Persist] =
     ProjectionConfigBuilder(storage = Persist(restart = false), error = F, init = F.unit)
 
   /**
@@ -200,7 +205,8 @@ object ProjectionConfig {
     */
   final def fromConfig[F[_]: Timer](
       implicit as: ActorSystem,
-      F: MonadError[F, Throwable]): ProjectionConfigBuilder[F, NotUsed, NotUsed, _, _, _, _, _, Throwable, Persist] = {
+      F: MonadError[F, Throwable]
+  ): ProjectionConfigBuilder[F, NotUsed, NotUsed, _, _, _, _, _, Throwable, Persist] = {
     val config                           = as.settings.config.getConfig("indexing")
     val timeout                          = FiniteDuration(config.getDuration("batch-timeout", MILLISECONDS), MILLISECONDS)
     val chunk                            = config.getInt("batch")

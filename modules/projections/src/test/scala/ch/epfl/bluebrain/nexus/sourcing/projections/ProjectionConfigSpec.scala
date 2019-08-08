@@ -33,18 +33,20 @@ class ProjectionConfigSpec
     "build a the configuration for index function with persistence" in {
       val storage = Persist(restart = false)
       val expected: ProjectionConfig[IO, String, String, Throwable, Persist] =
-        ProjectionConfig("t",
-                         "p",
-                         "n",
-                         identity,
-                         indexF,
-                         mapProgress,
-                         mapProgress,
-                         initF,
-                         1,
-                         50 millis,
-                         Retry(strategy),
-                         storage)
+        ProjectionConfig(
+          "t",
+          "p",
+          "n",
+          identity,
+          indexF,
+          mapProgress,
+          mapProgress,
+          initF,
+          1,
+          50 millis,
+          Retry(strategy),
+          storage
+        )
       builder[IO]
         .name("n")
         .plugin("p")
@@ -58,18 +60,20 @@ class ProjectionConfigSpec
     "build a the configuration for index function without persistence" in {
       val st = Linear(10 millis, 1 hour)
       val expected: ProjectionConfig[IO, String, String, Throwable, Volatile] =
-        ProjectionConfig("t",
-                         "p",
-                         "n",
-                         identity,
-                         indexF,
-                         mapProgress,
-                         mapProgress,
-                         initF,
-                         5,
-                         100 millis,
-                         Retry(st),
-                         Volatile)
+        ProjectionConfig(
+          "t",
+          "p",
+          "n",
+          identity,
+          indexF,
+          mapProgress,
+          mapProgress,
+          initF,
+          5,
+          100 millis,
+          Retry(st),
+          Volatile
+        )
       builder[IO]
         .name("n")
         .plugin("p")
@@ -87,18 +91,20 @@ class ProjectionConfigSpec
       val storage = Persist(restart = false)
       val st      = Backoff(100 millis, 10 hours, 0.5, 7)
       val expected: ProjectionConfig[IO, String, String, Throwable, Persist] =
-        ProjectionConfig("t",
-                         "p",
-                         "n",
-                         identity,
-                         indexF,
-                         mapProgress,
-                         mapProgress,
-                         initF,
-                         10,
-                         40 millis,
-                         Retry(st),
-                         storage)
+        ProjectionConfig(
+          "t",
+          "p",
+          "n",
+          identity,
+          indexF,
+          mapProgress,
+          mapProgress,
+          initF,
+          10,
+          40 millis,
+          Retry(st),
+          storage
+        )
       fromConfig[IO]
         .name("n")
         .plugin("p")

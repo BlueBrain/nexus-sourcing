@@ -91,12 +91,14 @@ class TagProjectionSpec
         "global",
         1,
         PassivationStrategyConfig(None, None),
-        RetryStrategyConfig("once",
-                            config.askTimeout.duration,
-                            config.askTimeout.duration,
-                            1,
-                            0.1,
-                            config.askTimeout.duration)
+        RetryStrategyConfig(
+          "once",
+          config.askTimeout.duration,
+          config.askTimeout.duration,
+          1,
+          0.1,
+          config.askTimeout.duration
+        )
       )
       val agg = AkkaAggregate
         .sharded[IO](
@@ -304,8 +306,10 @@ class TagProjectionSpec
       expectTerminated(indexer.actor)
     }
 
-    "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type]("ignore",
-                                                                                                      tag = "ignore") {
+    "not retry when index function fails with a non RetriableErr" in new Context[IgnoreExecuted.type](
+      "ignore",
+      tag = "ignore"
+    ) {
       override val index =
         (_: List[EventTransform]) => IO.delay(throw SomeOtherError(count.incrementAndGet()))
 

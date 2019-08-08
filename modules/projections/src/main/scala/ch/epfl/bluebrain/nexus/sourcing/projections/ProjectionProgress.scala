@@ -79,9 +79,11 @@ object ProjectionProgress {
     case o: NoOffset.type => encodeDiscriminated(o)
   }
 
-  final implicit def offsetDecoder(implicit S: ClassTag[Sequence],
-                                   TBU: ClassTag[TimeBasedUUID],
-                                   NO: ClassTag[NoOffset.type]): Decoder[Offset] = {
+  final implicit def offsetDecoder(
+      implicit S: ClassTag[Sequence],
+      TBU: ClassTag[TimeBasedUUID],
+      NO: ClassTag[NoOffset.type]
+  ): Decoder[Offset] = {
     val sequence      = S.runtimeClass.getSimpleName
     val timeBasedUUID = TBU.runtimeClass.getSimpleName
     val noOffset      = NO.runtimeClass.getSimpleName

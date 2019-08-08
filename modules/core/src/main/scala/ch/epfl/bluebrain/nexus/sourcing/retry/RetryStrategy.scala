@@ -33,7 +33,7 @@ object RetryStrategy {
       initialDelay: FiniteDuration,
       maxDelay: FiniteDuration,
       randomFactor: Double,
-      maxRetries: Int = Int.MaxValue,
+      maxRetries: Int = Int.MaxValue
   ) extends RetryStrategy {
     override def next(current: FiniteDuration, retries: Int): Option[FiniteDuration] = {
       if (retries == 0) Some(initialDelay)
@@ -60,7 +60,7 @@ object RetryStrategy {
       initialDelay: FiniteDuration,
       maxDelay: FiniteDuration,
       increment: FiniteDuration = 1 second,
-      maxRetries: Int = Int.MaxValue,
+      maxRetries: Int = Int.MaxValue
   ) extends RetryStrategy {
 
     override def next(current: FiniteDuration, retries: Int): Option[FiniteDuration] = {

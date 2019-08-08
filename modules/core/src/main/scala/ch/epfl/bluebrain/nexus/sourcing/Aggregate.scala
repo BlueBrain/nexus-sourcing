@@ -96,7 +96,7 @@ private[sourcing] class InMemoryAggregate[F[_]: Concurrent, Identifier, Event, S
     override val name: String,
     initialState: State,
     next: (State, Event) => State,
-    evaluate: (State, Command) => F[Either[Rejection, Event]],
+    evaluate: (State, Command) => F[Either[Rejection, Event]]
 ) extends Aggregate[F, Identifier, Event, State, Command, Rejection] {
 
   private val map = new ConcurrentHashMap[Identifier, (Semaphore[F], Vector[Event])]()

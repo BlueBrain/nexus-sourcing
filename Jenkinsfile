@@ -3,7 +3,7 @@ Boolean isRelease = version ==~ /v\d+\.\d+\.\d+.*/
 Boolean isPR = env.CHANGE_ID != null
 
 pipeline {
-    agent none
+    agent { label 'slave-sbt' }
     tools {
         jdk 'jdk11'
     }

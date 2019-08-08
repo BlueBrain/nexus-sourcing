@@ -27,7 +27,7 @@ final case class SourcingConfig(
     commandEvaluationExecutionContext: String,
     shards: Int,
     passivation: PassivationStrategyConfig,
-    retry: RetryStrategyConfig,
+    retry: RetryStrategyConfig
 ) {
 
   /**
@@ -75,7 +75,7 @@ object SourcingConfig {
     */
   final case class PassivationStrategyConfig(
       lapsedSinceLastInteraction: Option[FiniteDuration],
-      lapsedSinceRecoveryCompleted: Option[FiniteDuration],
+      lapsedSinceRecoveryCompleted: Option[FiniteDuration]
   )
 
   /**

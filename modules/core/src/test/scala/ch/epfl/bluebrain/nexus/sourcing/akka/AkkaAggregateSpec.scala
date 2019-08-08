@@ -289,10 +289,12 @@ class AkkaAggregateSpec
     }
   }
 
-  def runTests(agg: Aggregate[IO, String, Event, State, Command, Rejection],
-               name: String,
-               first: String,
-               second: String): Unit = {
+  def runTests(
+      agg: Aggregate[IO, String, Event, State, Command, Rejection],
+      name: String,
+      first: String,
+      second: String
+  ): Unit = {
 
     "return its name" in {
       agg.name shouldEqual name

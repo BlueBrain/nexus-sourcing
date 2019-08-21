@@ -1,5 +1,6 @@
 package ch.epfl.bluebrain.nexus.sourcing.projections
 
+import akka.actor.{ActorRef, Props}
 import cats.effect.{IO, Timer}
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressStorage._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionConfig._
@@ -18,8 +19,10 @@ class ProjectionConfigSpec
   private implicit val timer: Timer[IO] = IO.timer(system.dispatcher)
 
   "A IndexerConfig" should {
-    val indexF: List[String] => IO[Unit]            = _ => IO.unit
-    val initF: IO[Unit]                             = IO.unit
+    val indexF: List[String] => IO[Unit] = _ => IO.unit
+    val initF: IO[Unit]                  = IO.unit
+    val actorOf: (Props, String) => ActorRef =
+      (props: Props, name: String) => system.actorOf(props, s"${name}-something")
     val mapProgress: ProjectionProgress => IO[Unit] = _ => IO.unit
     val strategy: RetryStrategy                     = Linear(0 millis, 2000 hours)
     val identity: String => IO[Option[String]]      = (v: String) => IO.pure(Some(v))
@@ -37,6 +40,7 @@ class ProjectionConfigSpec
           "t",
           "p",
           "n",
+          None,
           identity,
           indexF,
           mapProgress,
@@ -64,6 +68,7 @@ class ProjectionConfigSpec
           "t",
           "p",
           "n",
+          Some(actorOf),
           identity,
           indexF,
           mapProgress,
@@ -78,6 +83,7 @@ class ProjectionConfigSpec
         .name("n")
         .plugin("p")
         .tag("t")
+        .actorOf(actorOf)
         .batch(5, 100 millis)
         .retry(st)
         .mapping(identity)
@@ -95,6 +101,7 @@ class ProjectionConfigSpec
           "t",
           "p",
           "n",
+          None,
           identity,
           indexF,
           mapProgress,

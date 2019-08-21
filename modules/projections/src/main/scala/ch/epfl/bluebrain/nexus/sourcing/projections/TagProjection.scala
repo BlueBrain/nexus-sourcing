@@ -1,7 +1,7 @@
 package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.{Logging, LoggingAdapter}
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
@@ -60,6 +60,8 @@ object OffsetEvtBatch {
 
 object TagProjection {
 
+  private def defaultActorOf(implicit as: ActorSystem): ((Props, String) => ActorRef) = as.actorOf(_, _)
+
   /**
     * Generic tag projection that iterates over the collection of events selected via the specified tag.
     * The offset and the failures are NOT persisted once computed the index function.
@@ -73,7 +75,28 @@ object TagProjection {
       F: Effect[F]
   ): StreamSupervisor[F, ProjectionProgress] = {
     val tagProjection: TagProjection[F, ProjectionProgress] = new VolatileTagProjection(config)
-    StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
+    val actorOf                                             = config.actorOf.getOrElse(defaultActorOf)
+    StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name, actorOf)
+  }
+
+  /**
+    * Generic tag projection that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are NOT persisted once computed the index function.
+    * The projection runs only once on all the cluster
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  // $COVERAGE-OFF$
+  final def startSingleton[F[_], Event: ClassTag, MappedEvt, Err](
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Volatile]
+  )(
+      implicit as: ActorSystem,
+      sourcingConfig: SourcingConfig,
+      F: Effect[F]
+  ): StreamSupervisor[F, ProjectionProgress] = {
+    val tagProjection: TagProjection[F, ProjectionProgress] = new VolatileTagProjection(config)
+    val actorOf                                             = config.actorOf.getOrElse(defaultActorOf)
+    StreamSupervisor.startSingleton(tagProjection.fetchInit, tagProjection.source, config.name, actorOf)
   }
 
   /**
@@ -103,7 +126,28 @@ object TagProjection {
       F: Effect[F]
   ): StreamSupervisor[F, ProjectionProgress] = {
     val tagProjection: TagProjection[F, ProjectionProgress] = new PersistentTagProjection(config)
-    StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name)
+    val actorOf                                             = config.actorOf.getOrElse(defaultActorOf)
+    StreamSupervisor.start(tagProjection.fetchInit, tagProjection.source, config.name, actorOf)
+  }
+
+  /**
+    * Generic tag projection that iterates over the collection of events selected via the specified tag.
+    * The offset and the failures are persisted once computed the index function.
+    * The projection runs only once on all the cluster
+    *
+    * @param config the index configuration which holds the necessary information to start the tag indexer
+    */
+  final def startSingleton[F[_], Event: ClassTag, MappedEvt, Err](
+      config: ProjectionConfig[F, Event, MappedEvt, Err, Persist]
+  )(
+      implicit projections: Projections[F, Event],
+      as: ActorSystem,
+      sourcingConfig: SourcingConfig,
+      F: Effect[F]
+  ): StreamSupervisor[F, ProjectionProgress] = {
+    val tagProjection: TagProjection[F, ProjectionProgress] = new PersistentTagProjection(config)
+    val actorOf                                             = config.actorOf.getOrElse(defaultActorOf)
+    StreamSupervisor.startSingleton(tagProjection.fetchInit, tagProjection.source, config.name, actorOf)
   }
 
   /**

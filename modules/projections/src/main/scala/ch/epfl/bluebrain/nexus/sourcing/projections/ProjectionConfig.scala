@@ -3,7 +3,7 @@ package ch.epfl.bluebrain.nexus.sourcing.projections
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
 import akka.NotUsed
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem, Props}
 import cats.MonadError
 import cats.effect.Timer
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
@@ -22,6 +22,7 @@ import scala.concurrent.duration._
   * @param tag                the tag to use while selecting the events from the store
   * @param pluginId           the persistence query plugin id
   * @param name               the name of this indexer
+  * @param actorOf            a function that given an actor Props and a name it instantiates an ActorRef
   * @param mapping            the mapping function from Event to MappedEvt
   * @param index              the indexing function
   * @param mapInitialProgress a function used to map initial [[ProjectionProgress]]
@@ -32,15 +33,16 @@ import scala.concurrent.duration._
   *                           Batching will the amount of time ''batchTo'' to have ''batch'' number of events the retry
   *                           strategy.
   * @param storage            the [[ProgressStorage]]
-  * @tparam Event             the event type
-  * @tparam MappedEvt         the mapped event type
-  * @tparam Err               the error type
-  * @tparam O                 the type of [[ProgressStorage]]
+  * @tparam Event     the event type
+  * @tparam MappedEvt the mapped event type
+  * @tparam Err       the error type
+  * @tparam O         the type of [[ProgressStorage]]
   */
 final case class ProjectionConfig[F[_], Event, MappedEvt, Err, O <: ProgressStorage] private (
     tag: String,
     pluginId: String,
     name: String,
+    actorOf: Option[(Props, String) => ActorRef],
     mapping: Event => F[Option[MappedEvt]],
     index: List[MappedEvt] => F[Unit],
     mapInitialProgress: ProjectionProgress => F[Unit],
@@ -87,6 +89,7 @@ object ProjectionConfig {
       tag: Option[String] = None,
       plugin: Option[String] = None,
       name: Option[String] = None,
+      actorOf: Option[(Props, String) => ActorRef] = None,
       mapping: Option[Event => F[Option[MappedEvt]]] = None,
       index: Option[List[MappedEvt] => F[Unit]] = None,
       mapInitialProgress: Option[ProjectionProgress => F[Unit]] = None,
@@ -111,24 +114,15 @@ object ProjectionConfig {
     ): ProjectionConfig[F, Event, MappedEvt, Err, O] =
       (tag, plugin, name, index, mapping) match {
         case (Some(t), Some(p), Some(n), Some(i), Some(m)) =>
-          ProjectionConfig(
-            t,
-            p,
-            n,
-            m,
-            i,
-            mapInitialProgress.getOrElse { _: ProjectionProgress =>
-              F.unit
-            },
-            mapProgress.getOrElse { _: ProjectionProgress =>
-              F.unit
-            },
-            init,
-            batch,
-            batchTo,
-            Retry(strategy),
-            storage
-          )
+          val initProgress = mapInitialProgress.getOrElse { _: ProjectionProgress =>
+            F.unit
+          }
+          val prorgess = mapProgress.getOrElse { _: ProjectionProgress =>
+            F.unit
+          }
+          // format: off
+          ProjectionConfig(t, p, n, actorOf, m, i, initProgress,  prorgess, init, batch, batchTo, Retry(strategy), storage)
+        // format: on
         case _ => throw new RuntimeException("Unexpected: some of the required fields are not set")
       }
 
@@ -143,6 +137,11 @@ object ProjectionConfig {
 
     def init(value: F[Unit]): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
       copy(init = value)
+
+    def actorOf(
+        value: (Props, String) => ActorRef
+    ): ProjectionConfigBuilder[F, Event, MappedEvt, Tag, Plugin, Name, Index, Mapping, Err, O] =
+      copy(actorOf = Some(value))
 
     def index(value: List[MappedEvt] => F[Unit])(
         implicit @silent ev: Mapping =:= Ready

@@ -167,26 +167,38 @@ object StreamSupervisor {
   /**
     * Builds a [[StreamSupervisor]].
     *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
+    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
+    * @param source  an initialization function that produces a stream from an initial start value
+    * @param name    the actor name
+    * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
     */
-  final def start[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
-      implicit as: ActorSystem,
-      config: SourcingConfig
+  final def start[F[_]: Effect, A: ClassTag](
+      init: F[A],
+      source: A => Source[A, _],
+      name: String,
+      actorOf: (Props, String) => ActorRef
+  )(
+      implicit config: SourcingConfig
   ): StreamSupervisor[F, A] =
-    new StreamSupervisor[F, A](as.actorOf(props(init, source), name))
+    new StreamSupervisor[F, A](actorOf(props(init, source), name))
 
   /**
     * Builds a [[StreamSupervisor]].
     *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
+    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
+    * @param source  an initialization function that produces a stream from an initial start value
+    * @param name    the actor name
+    * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
     */
-  final def delay[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
-      implicit as: ActorSystem,
-      config: SourcingConfig
+  final def delay[F[_]: Effect, A: ClassTag](
+      init: F[A],
+      source: A => Source[A, _],
+      name: String,
+      actorOf: (Props, String) => ActorRef
+  )(
+      implicit config: SourcingConfig
   ): F[StreamSupervisor[F, A]] =
-    Effect[F].delay(start(init, source, name))
+    Effect[F].delay(start(init, source, name, actorOf))
 
   /**
     * Builds a [[Props]] for a [[StreamSupervisorActor]] with it cluster singleton configuration.
@@ -206,25 +218,39 @@ object StreamSupervisor {
   /**
     * Builds a  [[StreamSupervisor]] based on a cluster singleton actor.
     *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
+    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
+    * @param source  an initialization function that produces a stream from an initial start value
+    * @param name    the actor name
+    * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
     */
-  final def startSingleton[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
+  final def startSingleton[F[_]: Effect, A: ClassTag](
+      init: F[A],
+      source: A => Source[A, _],
+      name: String,
+      actorOf: (Props, String) => ActorRef
+  )(
       implicit as: ActorSystem,
       config: SourcingConfig
   ): StreamSupervisor[F, A] =
-    new StreamSupervisor[F, A](as.actorOf(singletonProps(init, source), name))
+    new StreamSupervisor[F, A](actorOf(singletonProps(init, source), name))
 
   /**
     * Builds a  [[StreamSupervisor]] based on a cluster singleton actor.
     *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
+    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
+    * @param source  an initialization function that produces a stream from an initial start value
+    * @param name    the actor name
+    * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
     */
-  final def delaySingleton[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _], name: String)(
+  final def delaySingleton[F[_]: Effect, A: ClassTag](
+      init: F[A],
+      source: A => Source[A, _],
+      name: String,
+      actorOf: (Props, String) => ActorRef
+  )(
       implicit as: ActorSystem,
       config: SourcingConfig
   ): F[StreamSupervisor[F, A]] =
-    Effect[F].delay(startSingleton(init, source, name))
+    Effect[F].delay(startSingleton(init, source, name, actorOf))
   // $COVERAGE-ON$
 }

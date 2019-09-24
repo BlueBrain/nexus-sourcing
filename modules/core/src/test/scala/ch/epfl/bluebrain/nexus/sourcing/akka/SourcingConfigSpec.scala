@@ -8,7 +8,7 @@ import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategy
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{Matchers, OptionValues, WordSpecLike}
 import pureconfig.generic.auto._
-import pureconfig.loadConfigOrThrow
+import pureconfig.ConfigSource
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -33,7 +33,7 @@ class SourcingConfigSpec
 
     "read from config file" in {
       val readConfig = ConfigFactory.parseFile(new File(getClass.getResource("/example-sourcing.conf").toURI))
-      loadConfigOrThrow[SourcingConfig](readConfig, "sourcing") shouldEqual config
+      ConfigSource.fromConfig(readConfig).at("sourcing").loadOrThrow[SourcingConfig] shouldEqual config
     }
 
     "return AkkaSourcingConfig" in {

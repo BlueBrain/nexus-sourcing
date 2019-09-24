@@ -8,7 +8,7 @@ import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
 import akka.stream.{ActorMaterializer, KillSwitches, UniqueKillSwitch}
 import akka.util.Timeout
 import cats.effect.syntax.all._
-import cats.effect.{Effect, IO}
+import cats.effect.{ContextShift, Effect, IO}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.StreamSupervisor.{FetchLatestState, LatestState, Stop}
@@ -21,9 +21,10 @@ import scala.reflect.ClassTag
   *
   * @param actor the underlying actor
   */
-class StreamSupervisor[F[_], A](val actor: ActorRef)(implicit F: Effect[F], config: SourcingConfig) {
-
-  private implicit val askTimeout: Timeout = config.askTimeout
+class StreamSupervisor[F[_], A](val actor: ActorRef)(implicit F: Effect[F], as: ActorSystem, config: SourcingConfig) {
+  private implicit val ec: ExecutionContext           = as.dispatcher
+  private implicit val askTimeout: Timeout            = config.askTimeout
+  private implicit val contextShift: ContextShift[IO] = IO.contextShift(ec)
 
   /**
     * Fetches the latest state from the underlying actor
@@ -178,7 +179,8 @@ object StreamSupervisor {
       name: String,
       actorOf: (Props, String) => ActorRef
   )(
-      implicit config: SourcingConfig
+      implicit as: ActorSystem,
+      config: SourcingConfig
   ): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](actorOf(props(init, source), name))
 
@@ -196,7 +198,8 @@ object StreamSupervisor {
       name: String,
       actorOf: (Props, String) => ActorRef
   )(
-      implicit config: SourcingConfig
+      implicit as: ActorSystem,
+      config: SourcingConfig
   ): F[StreamSupervisor[F, A]] =
     Effect[F].delay(start(init, source, name, actorOf))
 

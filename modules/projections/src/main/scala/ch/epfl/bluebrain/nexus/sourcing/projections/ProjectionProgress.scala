@@ -5,7 +5,7 @@ import java.util.UUID
 import akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
 import io.circe._
 import io.circe.generic.extras.Configuration
-import io.circe.generic.extras.semiauto.{deriveDecoder, deriveEncoder}
+import io.circe.generic.extras.semiauto.{deriveConfiguredDecoder, deriveConfiguredEncoder}
 
 import scala.reflect.ClassTag
 
@@ -100,8 +100,8 @@ object ProjectionProgress {
     }
   }
 
-  implicit val projectionProgressEncoder: Encoder[ProjectionProgress] = deriveEncoder[ProjectionProgress]
-  implicit val projectionProgressDecoder: Decoder[ProjectionProgress] = deriveDecoder[ProjectionProgress]
+  implicit val projectionProgressEncoder: Encoder[ProjectionProgress] = deriveConfiguredEncoder[ProjectionProgress]
+  implicit val projectionProgressDecoder: Decoder[ProjectionProgress] = deriveConfiguredDecoder[ProjectionProgress]
 
   private def encodeDiscriminated[A: Encoder](a: A)(implicit A: ClassTag[A]) =
     Encoder[A].apply(a).deepMerge(Json.obj("type" -> Json.fromString(A.runtimeClass.getSimpleName)))

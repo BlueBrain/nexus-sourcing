@@ -12,7 +12,7 @@ import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy.Linear
 import ch.epfl.bluebrain.nexus.sourcing.retry.{Retry, RetryStrategy}
 import com.github.ghik.silencer.silent
 import pureconfig.generic.auto._
-import pureconfig.loadConfigOrThrow
+import pureconfig.ConfigSource
 
 import scala.concurrent.duration._
 
@@ -209,7 +209,8 @@ object ProjectionConfig {
     val config                           = as.settings.config.getConfig("indexing")
     val timeout                          = FiniteDuration(config.getDuration("batch-timeout", MILLISECONDS), MILLISECONDS)
     val chunk                            = config.getInt("batch")
-    val retryConfig: RetryStrategyConfig = loadConfigOrThrow[RetryStrategyConfig](config, "retry")
+    val retryConfig: RetryStrategyConfig = ConfigSource.fromConfig(config).at("retry").loadOrThrow[RetryStrategyConfig]
+
     builder.retry(retryConfig.retryStrategy).batch(chunk, timeout)
   }
 

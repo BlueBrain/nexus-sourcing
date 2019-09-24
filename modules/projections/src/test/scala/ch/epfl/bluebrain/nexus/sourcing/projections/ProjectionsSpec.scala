@@ -5,7 +5,7 @@ import akka.persistence.query.Offset
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.testkit.{TestKit, TestKitBase}
-import cats.effect.IO
+import cats.effect.{ContextShift, IO}
 import ch.epfl.bluebrain.nexus.commons.test.Randomness
 import ch.epfl.bluebrain.nexus.commons.test.io.IOValues
 import ch.epfl.bluebrain.nexus.sourcing.projections.Fixture.memoize
@@ -28,8 +28,9 @@ class ProjectionsSpec
     with Eventually
     with BeforeAndAfterAll {
 
-  override implicit lazy val system: ActorSystem = SystemBuilder.persistence("ProjectionsSpec")
-  private implicit val mt: ActorMaterializer     = ActorMaterializer()
+  override implicit lazy val system: ActorSystem      = SystemBuilder.persistence("ProjectionsSpec")
+  private implicit val mt: ActorMaterializer          = ActorMaterializer()
+  private implicit val contextShift: ContextShift[IO] = IO.contextShift(system.dispatcher)
 
   override protected def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)

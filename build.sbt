@@ -26,18 +26,19 @@ scalafmt: {
 
 // Dependency versions
 val akkaVersion                     = "2.5.25"
-val akkaHttpVersion                 = "10.1.9"
+val akkaHttpVersion                 = "10.1.10"
 val akkaPersistenceCassandraVersion = "0.99"
 val akkaPersistenceInMemVersion     = "2.5.15.2"
-val catsVersion                     = "1.6.1"
-val commonsVersion                  = "0.17.5"
-val catsEffectVersion               = "1.4.0"
-val circeVersion                    = "0.11.1"
+val catsVersion                     = "2.0.0"
+val commonsVersion                  = "0.17.10"
+val catsEffectVersion               = "2.0.0"
+val circeVersion                    = "0.12.1"
+val circeVersionExtras              = "0.12.2"
 val journalVersion                  = "3.0.19"
 val logbackVersion                  = "1.2.3"
 val shapelessVersion                = "2.3.3"
 val scalaTestVersion                = "3.0.8"
-val pureconfigVersion               = "0.11.1"
+val pureconfigVersion               = "0.12.0"
 
 // Dependency modules
 lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion
@@ -55,7 +56,7 @@ lazy val akkaTestKit              = "com.typesafe.akka"       %% "akka-testkit" 
 lazy val akkaSlf4j                = "com.typesafe.akka"       %% "akka-slf4j"                          % akkaVersion
 lazy val circeCore                = "io.circe"                %% "circe-core"                          % circeVersion
 lazy val circeParser              = "io.circe"                %% "circe-parser"                        % circeVersion
-lazy val circeGenericExtras       = "io.circe"                %% "circe-generic-extras"                % circeVersion
+lazy val circeGenericExtras       = "io.circe"                %% "circe-generic-extras"                % circeVersionExtras
 lazy val journal                  = "io.verizon.journal"      %% "core"                                % journalVersion
 lazy val logback                  = "ch.qos.logback"          % "logback-classic"                      % logbackVersion
 lazy val scalaTest                = "org.scalatest"           %% "scalatest"                           % scalaTestVersion

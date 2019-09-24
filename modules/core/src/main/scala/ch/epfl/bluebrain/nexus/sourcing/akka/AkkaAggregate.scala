@@ -47,6 +47,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
 
   private implicit val timeout: Timeout = config.askTimeout
   private implicit val r                = retry
+  private implicit val contextShift     = IO.contextShift(as.dispatcher)
 
   private val Event = implicitly[ClassTag[Event]]
   private val F     = implicitly[Async[F]]

@@ -125,9 +125,9 @@ object Projections {
   private class CassandraProjections[F[_], E: Encoder: Decoder](
       session: CassandraSession,
       stmts: Statements
-  )(implicit F: Async[F])
+  )(implicit as: ActorSystem, F: Async[F])
       extends Projections[F, E] {
-
+    import as.dispatcher
     override def recordProgress(id: String, progress: ProjectionProgress): F[Unit] =
       wrapFuture(session.executeWrite(stmts.recordProgressQuery, progress.asJson.noSpaces, id)) >> F.unit
 
@@ -164,8 +164,10 @@ object Projections {
     }
   }
 
-  private def wrapFuture[F[_]: LiftIO, A](f: => Future[A]): F[A] =
+  private def wrapFuture[F[_]: LiftIO, A](f: => Future[A])(implicit ec: ExecutionContextExecutor): F[A] = {
+    implicit val contextShift = IO.contextShift(ec)
     IO.fromFuture(IO(f)).to[F]
+  }
 
   private def wrapFuture[F[_]: LiftIO, A](f: => ListenableFuture[A])(implicit ec: ExecutionContextExecutor): F[A] =
     wrapFuture {

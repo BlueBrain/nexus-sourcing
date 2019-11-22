@@ -69,7 +69,7 @@ final case class Message[A](
   def failures(): Map[String, Failed] = progress.collect { case (id, v: Failed) => (id, v) }
 
   /**
-    * checks whether the current message has the same identifiers as the passed one
+    * Checks whether the current message has the same identifiers as the passed one.
     *
     * @param that the message to compare against the current
     * @tparam B the generic type of the message

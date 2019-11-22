@@ -92,13 +92,11 @@ object ProjectionProgress {
     def processed: Long
 
     /**
-      *
       * Count of discarded events.
       */
     def discarded: Long
 
     /**
-      *
       * Count of failed events.
       */
     def failed: Long

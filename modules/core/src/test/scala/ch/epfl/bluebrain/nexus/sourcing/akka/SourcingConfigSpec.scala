@@ -26,7 +26,7 @@ class SourcingConfigSpec
     "global",
     10,
     PassivationStrategyConfig(Some(5 seconds), Some(0 milliseconds)),
-    RetryStrategyConfig("exponential", 100 milliseconds, 10 hours, 7, 2.0, 500 milliseconds)
+    RetryStrategyConfig("exponential", 100 milliseconds, 10 hours, 7, 500 milliseconds)
   )
 
   "SourcingConfig" should {

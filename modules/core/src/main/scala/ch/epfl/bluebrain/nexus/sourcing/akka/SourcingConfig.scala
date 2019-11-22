@@ -2,9 +2,10 @@ package ch.epfl.bluebrain.nexus.sourcing.akka
 
 import akka.actor.ActorSystem
 import akka.util.Timeout
+import cats.Applicative
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig._
-import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy
-import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy._
+import retry.RetryPolicies._
+import retry.RetryPolicy
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
@@ -81,32 +82,34 @@ object SourcingConfig {
   /**
     * Retry strategy configuration.
     *
-    * @param strategy     the type of strategy; possible options are "never", "once" and "exponential"
+    * @param strategy     the type of strategy; possible options are "never", "once", "constant" and "exponential"
     * @param initialDelay the initial delay before retrying that will be multiplied with the 'factor' for each attempt
-    *                     (applicable for strategy "exponential" and "linear")
-    * @param maxDelay     the maximum delay (applicable for strategy "exponential" and "linear")
-    * @param maxRetries   maximum number of retries in case of failure (applicable only for strategy "exponential")
-    * @param factor       the exponential factor (applicable only for strategy "exponential")
-    * @param increment    the linear increment (applicable only for strategy "linear")
+    *                     (applicable only for strategy "exponential")
+    * @param maxDelay     the maximum delay (applicable for strategy "exponential")
+    * @param maxRetries   maximum number of retries in case of failure (applicable for strategy "exponential" and "constant")
+    * @param constant    the constant delay (applicable only for strategy "constant")
     */
   final case class RetryStrategyConfig(
       strategy: String,
       initialDelay: FiniteDuration,
       maxDelay: FiniteDuration,
       maxRetries: Int,
-      factor: Double,
-      increment: FiniteDuration
+      constant: FiniteDuration
   ) {
 
     /**
-      * Computes a retry strategy from the provided configuration.
+      * Computes a retry policy from the provided configuration.
       */
-    def retryStrategy: RetryStrategy =
+    def retryPolicy[F[_]: Applicative]: RetryPolicy[F] =
       strategy match {
-        case "exponential" => Backoff(initialDelay, maxDelay, factor, maxRetries)
-        case "linear"      => Linear(initialDelay, maxDelay, increment, maxRetries)
-        case "once"        => Once(initialDelay)
-        case _             => Never
+        case "exponential" =>
+          capDelay[F](maxDelay, fullJitter[F](initialDelay)) join limitRetries[F](maxRetries)
+        case "constant" =>
+          constantDelay[F](constant) join limitRetries[F](maxRetries)
+        case "once" =>
+          constantDelay[F](initialDelay) join limitRetries[F](1)
+        case _ =>
+          alwaysGiveUp
       }
   }
 

@@ -60,7 +60,7 @@ final case class Message[A](
   /**
     * Combine two messages progress
     */
-  def +[B](that: Message[B]): Message[B] =
+  def addProgressOf[B](that: Message[B]): Message[B] =
     that.copy(progress = progress ++ that.progress)
 
   /**

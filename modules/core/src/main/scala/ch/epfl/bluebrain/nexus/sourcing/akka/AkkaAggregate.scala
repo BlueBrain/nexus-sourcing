@@ -10,11 +10,11 @@ import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
 import akka.routing.ConsistentHashingPool
 import akka.util.Timeout
+import cats.effect.{ContextShift, Effect, IO, Timer}
 import cats.syntax.all._
-import cats.effect.{ContextShift, Effect, IO}
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
-import retry.RetryPolicy
+import retry.CatsEffect._
 import retry._
 import retry.syntax.all._
 
@@ -35,7 +35,7 @@ import scala.reflect.ClassTag
   * @tparam Command   the command type
   * @tparam Rejection the rejection type
   */
-class AkkaAggregate[F[_]: Sleep, Event: ClassTag, State, Command, Rejection] private[akka] (
+class AkkaAggregate[F[_]: Timer, Event: ClassTag, State, Command, Rejection] private[akka] (
     override val name: String,
     selection: ActorRefSelection[F],
     config: AkkaSourcingConfig
@@ -129,7 +129,7 @@ final class AggregateTree[F[_]] {
   )(
       implicit
       F: Effect[F],
-      S: Sleep[F],
+      T: Timer[F],
       policy: RetryPolicy[F],
       as: ActorSystem
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
@@ -172,7 +172,7 @@ final class AggregateSharded[F[_]] {
   )(
       implicit
       F: Effect[F],
-      S: Sleep[F],
+      T: Timer[F],
       policy: RetryPolicy[F],
       as: ActorSystem
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
@@ -222,7 +222,7 @@ object AkkaAggregate {
     * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
-  def treeF[F[_]: Effect: Sleep, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
+  def treeF[F[_]: Effect: Timer, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
       name: String,
       initialState: State,
       next: (State, Event) => State,
@@ -274,7 +274,7 @@ object AkkaAggregate {
     * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
-  def shardedF[F[_]: Effect: Sleep, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
+  def shardedF[F[_]: Effect: Timer, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
       name: String,
       initialState: State,
       next: (State, Event) => State,

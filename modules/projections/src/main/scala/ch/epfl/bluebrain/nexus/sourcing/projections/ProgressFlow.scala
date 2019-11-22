@@ -304,7 +304,7 @@ object ProgressFlow {
       */
     def mergeCombine(): ProgressFlowElem[F, CIn, In, Unit] =
       new ProgressFlowElem(
-        flow.map(_.foldLeft(Message.empty)(_ + _.fold(identity, _.unit))).map[PairMsg[Unit]](Right.apply)
+        flow.map(_.foldLeft(Message.empty)(_ addProgressOf _.fold(identity, _.unit))).map[PairMsg[Unit]](Right.apply)
       )
 
     /**

@@ -17,7 +17,6 @@ import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, EitherValues, Matchers, WordSpecLike}
-import retry.CatsEffect._
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._

@@ -4,7 +4,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
 import akka.cluster.Cluster
-import akka.stream.ActorMaterializer
 import akka.testkit._
 import akka.util.Timeout
 import cats.effect.{ContextShift, IO, Timer}
@@ -34,9 +33,8 @@ class AkkaAggregateSpec
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig(1.second.dilated, 30 milliseconds)
 
-  implicit val mat: ActorMaterializer = ActorMaterializer()
-  implicit val ctx: ContextShift[IO]  = IO.contextShift(ExecutionContext.global)
-  implicit val timer: Timer[IO]       = IO.timer(ExecutionContext.global)
+  implicit val ctx: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+  implicit val timer: Timer[IO]      = IO.timer(ExecutionContext.global)
 
   val config = AkkaSourcingConfig(
     Timeout(1.second.dilated),

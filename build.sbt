@@ -25,20 +25,21 @@ scalafmt: {
  */
 
 // Dependency versions
-val akkaVersion                     = "2.5.25"
+val akkaVersion                     = "2.6.0"
 val akkaHttpVersion                 = "10.1.10"
-val akkaPersistenceCassandraVersion = "0.99"
+val akkaPersistenceCassandraVersion = "0.100"
 val akkaPersistenceInMemVersion     = "2.5.15.2"
 val catsVersion                     = "2.0.0"
-val commonsVersion                  = "0.17.10"
+val commonsVersion                  = "0.17.23-tmp-patch" // temporary until commons is released
 val catsEffectVersion               = "2.0.0"
-val circeVersion                    = "0.12.1"
+val circeVersion                    = "0.12.3"
 val circeVersionExtras              = "0.12.2"
 val journalVersion                  = "3.0.19"
+val kryoVersion                     = "1.0.0"
 val logbackVersion                  = "1.2.3"
 val shapelessVersion                = "2.3.3"
 val scalaTestVersion                = "3.0.8"
-val pureconfigVersion               = "0.12.0"
+val pureconfigVersion               = "0.12.1"
 
 // Dependency modules
 lazy val catsCore                 = "org.typelevel"           %% "cats-core"                           % catsVersion
@@ -58,6 +59,7 @@ lazy val circeCore                = "io.circe"                %% "circe-core"   
 lazy val circeParser              = "io.circe"                %% "circe-parser"                        % circeVersion
 lazy val circeGenericExtras       = "io.circe"                %% "circe-generic-extras"                % circeVersionExtras
 lazy val journal                  = "io.verizon.journal"      %% "core"                                % journalVersion
+lazy val kryo                     = "io.altoo"                %% "akka-kryo-serialization"             % kryoVersion
 lazy val logback                  = "ch.qos.logback"          % "logback-classic"                      % logbackVersion
 lazy val scalaTest                = "org.scalatest"           %% "scalatest"                           % scalaTestVersion
 lazy val commonsTest              = "ch.epfl.bluebrain.nexus" %% "commons-test"                        % commonsVersion
@@ -77,13 +79,15 @@ lazy val core = project
       akkaPersistenceInMem % Test,
       akkaSlf4j            % Test,
       akkaTestKit          % Test,
+      kryo                 % Test,
       logback              % Test,
       scalaTest            % Test,
       pureconfig           % Test
-    )
+    ),
+    Test / fork := true
   )
 
-lazy val stream = project
+lazy val projections = project
   .in(file("modules/projections"))
   .dependsOn(core)
   .settings(
@@ -103,9 +107,11 @@ lazy val stream = project
       akkaHttpTestKit         % Test,
       akkaSlf4j               % Test,
       commonsTest             % Test,
+      kryo                    % Test,
       pureconfig              % Test,
       scalaTest               % Test
-    )
+    ),
+    Test / fork := true
   )
 
 lazy val root = project
@@ -115,7 +121,7 @@ lazy val root = project
     name       := "sourcing",
     moduleName := "sourcing"
   )
-  .aggregate(core, stream)
+  .aggregate(core, projections)
 
 /* ********************************************************
  ******************** Grouped Settings ********************

@@ -30,7 +30,7 @@ class ActorSystemFixture(name: String, startCluster: Boolean = false)
   }
 
   override protected def afterAll(): Unit = {
-    TestKit.shutdownActorSystem(system)
+    TestKit.shutdownActorSystem(system, verifySystemShutdown = true)
     super.afterAll()
   }
 }

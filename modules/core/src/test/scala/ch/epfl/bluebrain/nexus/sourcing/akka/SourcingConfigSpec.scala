@@ -6,7 +6,7 @@ import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategyConfig, RetryStrategyConfig}
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, OptionValues, WordSpecLike}
+import org.scalatest.{BeforeAndAfterAll, Matchers, OptionValues, WordSpecLike}
 import pureconfig.generic.auto._
 import pureconfig.ConfigSource
 
@@ -17,6 +17,7 @@ class SourcingConfigSpec
     extends TestKit(ActorSystem("SourcingConfigSpec"))
     with WordSpecLike
     with Matchers
+    with BeforeAndAfterAll
     with OptionValues {
 
   val config = SourcingConfig(

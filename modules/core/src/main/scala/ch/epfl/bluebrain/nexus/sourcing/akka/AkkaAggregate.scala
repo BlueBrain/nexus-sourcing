@@ -9,7 +9,7 @@ import akka.pattern.ask
 import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
 import akka.routing.ConsistentHashingPool
-import akka.stream.ActorMaterializer
+import akka.stream.Materializer
 import akka.util.Timeout
 import cats.effect.{Async, Effect, IO}
 import cats.syntax.all._
@@ -42,7 +42,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
     selection: ActorRefSelection[F],
     retry: Retry[F, Throwable],
     config: AkkaSourcingConfig
-)(implicit as: ActorSystem, mat: ActorMaterializer)
+)(implicit as: ActorSystem, mat: Materializer)
     extends Aggregate[F, String, Event, State, Command, Rejection] {
 
   private implicit val timeout: Timeout = config.askTimeout
@@ -138,7 +138,7 @@ final class AggregateTree[F[_]] {
       implicit
       F: Effect[F],
       as: ActorSystem,
-      mat: ActorMaterializer
+      mat: Materializer
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
     AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, retry, config, poolSize)
 }
@@ -184,7 +184,7 @@ final class AggregateSharded[F[_]] {
       implicit
       F: Effect[F],
       as: ActorSystem,
-      mat: ActorMaterializer
+      mat: Materializer
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
     AkkaAggregate.shardedF(
       name,
@@ -245,7 +245,7 @@ object AkkaAggregate {
       retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int
-  )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
+  )(implicit as: ActorSystem, mat: Materializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val F = implicitly[Effect[F]]
     F.delay {
       val props  = AggregateActor.parentProps(name, initialState, next, evaluate, passivationStrategy, config)
@@ -302,7 +302,7 @@ object AkkaAggregate {
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
-  )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
+  )(implicit as: ActorSystem, mat: Materializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val settings = shardingSettings.getOrElse(ClusterShardingSettings(as))
     val shardExtractor: ExtractShardId = {
       case msg: Msg => math.abs(msg.id.hashCode) % shards toString

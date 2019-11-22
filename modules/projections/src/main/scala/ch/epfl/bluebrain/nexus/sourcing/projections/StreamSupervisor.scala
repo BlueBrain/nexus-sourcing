@@ -5,7 +5,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props, Status}
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings}
 import akka.pattern.{ask, pipe}
 import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, KillSwitches, UniqueKillSwitch}
+import akka.stream.{KillSwitches, UniqueKillSwitch}
 import akka.util.Timeout
 import cats.effect.syntax.all._
 import cats.effect.{ContextShift, Effect, IO}
@@ -59,10 +59,9 @@ object StreamSupervisor {
       extends Actor
       with ActorLogging {
 
-    private val A                              = implicitly[ClassTag[A]]
-    private implicit val as: ActorSystem       = context.system
-    private implicit val ec: ExecutionContext  = as.dispatcher
-    private implicit val mt: ActorMaterializer = ActorMaterializer()
+    private val A                             = implicitly[ClassTag[A]]
+    private implicit val as: ActorSystem      = context.system
+    private implicit val ec: ExecutionContext = as.dispatcher
     //noinspection ActorMutableStateInspection
     private var state: Option[A] = None
 

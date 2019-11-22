@@ -52,7 +52,7 @@ sealed abstract class ProgressFlow[F[_], CIn[_]: Traverse, COut[_]: Traverse, In
       val msg =
         s"Exception caught while running '$action' for message '${message.value}' in progress '${message.currProgressId}'"
       log.error(msg, err)
-      F.delay(Left(message.fail(s"$msg with message '${err.getMessage}'").unit))
+      F.pure(Left(message.fail(s"$msg with message '${err.getMessage}'").unit))
   }
 
   /**
@@ -97,8 +97,8 @@ sealed abstract class ProgressFlow[F[_], CIn[_]: Traverse, COut[_]: Traverse, In
     *
     * @see collect
     */
-  def collectCast[B](implicit T: ClassTag[B]): R[B] =
-    collect[B] { case T(v) => v }
+  def collectCast[B](implicit B: ClassTag[B]): R[B] =
+    collect[B] { case B(v) => v }
 
   /**
     * Transform the underlying stream by applying the given function to each of the Right side messages as they pass through this processing step.
@@ -130,7 +130,7 @@ sealed abstract class ProgressFlow[F[_], CIn[_]: Traverse, COut[_]: Traverse, In
       case Right(message) if eval.isAfter && !message.offset.gt(eval.offset) =>
         Future.successful(Right(message))
       case Right(message) =>
-        val resultF = f(message.value) >> F.delay[PairMsg[Out]](Right(message))
+        val resultF = f(message.value) >> F.pure[PairMsg[Out]](Right(message))
         resultF.recoverWith(logAndFail[Out](message, "runAsync")).toIO.unsafeToFuture()
       case Left(status) => Future.successful[PairMsg[Out]](Left(status.discard()))
     }.sequence))
@@ -186,7 +186,7 @@ object ProgressFlow {
               projections.recordFailure(failureId, msg.persistenceId, msg.sequenceNr, msg.offset, error)
           }
           .toList
-          .sequence >> F.delay(value)
+          .sequence >> F.pure(value)
         f.toIO.unsafeToFuture()
       })
 
@@ -252,6 +252,9 @@ object ProgressFlow {
 
   object ProgressFlowElem {
 
+    /**
+      * Creates a [[ProgressFlowElem]] with the desired effect type ''F[_]'' and input-output value ''A''
+      */
     def apply[F[_]: Effect: Timer, A](implicit ec: ExecutionContext): ProgressFlowElem[F, Id, A, A] =
       new ProgressFlowElem[F, Id, A, A](Flow[Id[PairMsg[A]]])
 
@@ -322,11 +325,11 @@ object ProgressFlow {
         val toEval = list.collect { case Right(msg) if eval.isAfter && msg.offset.gt(eval.offset) || eval.isAll => msg }
         if (toEval.isEmpty) Future.successful(list)
         else {
-          val resultF = f(toEval.map(_.value)) >> F.delay(list)
+          val resultF = f(toEval.map(_.value)) >> F.pure(list)
           resultF
             .recoverWith {
               case err =>
-                F.delay(list.map {
+                F.pure(list.map {
                   case Right(msg) if toEval.exists(_.sameIdentifier(msg)) =>
                     val errMsg =
                       s"Exception caught while running 'runAsyncAll' for message '${msg.value}' in progress '${msg.currProgressId}'"
@@ -350,6 +353,9 @@ object ProgressFlow {
 
   object ProgressFlowList {
 
+    /**
+      * Creates a [[ProgressFlowList]] with the desired effect type ''F[_]'' and input-output value ''A''
+      */
     def apply[F[_]: Effect: Timer, A](implicit ec: ExecutionContext): ProgressFlowList[F, List, A, A] =
       new ProgressFlowList[F, List, A, A](Flow[List[PairMsg[A]]])
 

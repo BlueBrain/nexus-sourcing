@@ -3,7 +3,6 @@ package ch.epfl.bluebrain.nexus.sourcing.retry
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.testkit._
 import cats.effect.{ContextShift, IO, Timer}
 import ch.epfl.bluebrain.nexus.sourcing.retry.RetryStrategy._
@@ -24,9 +23,8 @@ class RetrySpec
     with EitherValues {
   override implicit def patienceConfig: PatienceConfig = PatienceConfig(1.second.dilated, 30 milliseconds)
 
-  implicit val mat: ActorMaterializer = ActorMaterializer()
-  implicit val ctx: ContextShift[IO]  = IO.contextShift(ExecutionContext.global)
-  implicit val timer: Timer[IO]       = IO.timer(ExecutionContext.global)
+  implicit val ctx: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
+  implicit val timer: Timer[IO]      = IO.timer(ExecutionContext.global)
 
   abstract class IncrementAndFail {
     val count = new AtomicInteger(0)

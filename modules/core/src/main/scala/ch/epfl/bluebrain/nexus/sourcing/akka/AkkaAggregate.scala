@@ -9,9 +9,8 @@ import akka.pattern.ask
 import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
 import akka.routing.ConsistentHashingPool
-import akka.stream.ActorMaterializer
 import akka.util.Timeout
-import cats.effect.{Async, Effect, IO}
+import cats.effect.{Async, ContextShift, Effect, IO}
 import cats.syntax.all._
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
@@ -30,7 +29,6 @@ import scala.reflect.ClassTag
   * @param retry     a strategy for retrying operations that fail unexpectedly
   * @param config    the sourcing configuration
   * @param as        the actor system used to run the actors
-  * @param mat       a materializer for running persistence queries
   * @tparam F         [_]       the aggregate log effect type
   * @tparam Event     the event type
   * @tparam State     the state type
@@ -42,12 +40,12 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
     selection: ActorRefSelection[F],
     retry: Retry[F, Throwable],
     config: AkkaSourcingConfig
-)(implicit as: ActorSystem, mat: ActorMaterializer)
+)(implicit as: ActorSystem)
     extends Aggregate[F, String, Event, State, Command, Rejection] {
 
-  private implicit val timeout: Timeout = config.askTimeout
-  private implicit val r                = retry
-  private implicit val contextShift     = IO.contextShift(as.dispatcher)
+  private implicit val timeout: Timeout               = config.askTimeout
+  private implicit val r: Retry[F, Throwable]         = retry
+  private implicit val contextShift: ContextShift[IO] = IO.contextShift(as.dispatcher)
 
   private val Event = implicitly[ClassTag[Event]]
   private val F     = implicitly[Async[F]]
@@ -118,7 +116,6 @@ final class AggregateTree[F[_]] {
     * @param poolSize            the size of the consistent hashing pool of persistent actor supervisors
     * @param F                   the aggregate effect type
     * @param as                  the underlying actor system
-    * @param mat                 an actor materializer for replaying event streams
     * @tparam Event     the aggregate event type
     * @tparam State     the aggregate state type
     * @tparam Command   the aggregate command type
@@ -137,8 +134,7 @@ final class AggregateTree[F[_]] {
   )(
       implicit
       F: Effect[F],
-      as: ActorSystem,
-      mat: ActorMaterializer
+      as: ActorSystem
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
     AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, retry, config, poolSize)
 }
@@ -163,7 +159,6 @@ final class AggregateSharded[F[_]] {
     * @param shardingSettings    the sharding configuration
     * @param F                   the aggregate effect type
     * @param as                  the underlying actor system
-    * @param mat                 an actor materializer for replaying event streams
     * @tparam Event     the aggregate event type
     * @tparam State     the aggregate state type
     * @tparam Command   the aggregate command type
@@ -183,8 +178,7 @@ final class AggregateSharded[F[_]] {
   )(
       implicit
       F: Effect[F],
-      as: ActorSystem,
-      mat: ActorMaterializer
+      as: ActorSystem
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
     AkkaAggregate.shardedF(
       name,
@@ -228,7 +222,6 @@ object AkkaAggregate {
     * @param config              the sourcing configuration
     * @param poolSize            the size of the consistent hashing pool of persistent actor supervisors
     * @param as                  the underlying actor system
-    * @param mat                 an actor materializer for replaying event streams
     * @tparam F         the aggregate effect type
     * @tparam Event     the aggregate event type
     * @tparam State     the aggregate state type
@@ -245,7 +238,7 @@ object AkkaAggregate {
       retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int
-  )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
+  )(implicit as: ActorSystem): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val F = implicitly[Effect[F]]
     F.delay {
       val props  = AggregateActor.parentProps(name, initialState, next, evaluate, passivationStrategy, config)
@@ -284,7 +277,6 @@ object AkkaAggregate {
     * @param shards              the number of shards to distribute across the cluster
     * @param shardingSettings    the sharding configuration
     * @param as                  the underlying actor system
-    * @param mat                 an actor materializer for replaying event streams
     * @tparam F         the aggregate effect type
     * @tparam Event     the aggregate event type
     * @tparam State     the aggregate state type
@@ -302,7 +294,7 @@ object AkkaAggregate {
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
-  )(implicit as: ActorSystem, mat: ActorMaterializer): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
+  )(implicit as: ActorSystem): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val settings = shardingSettings.getOrElse(ClusterShardingSettings(as))
     val shardExtractor: ExtractShardId = {
       case msg: Msg => math.abs(msg.id.hashCode) % shards toString

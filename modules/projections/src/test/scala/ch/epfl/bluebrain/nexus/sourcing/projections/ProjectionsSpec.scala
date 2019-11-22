@@ -2,7 +2,6 @@ package ch.epfl.bluebrain.nexus.sourcing.projections
 
 import akka.actor.ActorSystem
 import akka.persistence.query.Offset
-import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Source
 import akka.testkit.{TestKit, TestKitBase}
 import cats.effect.{ContextShift, IO}
@@ -29,7 +28,6 @@ class ProjectionsSpec
     with BeforeAndAfterAll {
 
   override implicit lazy val system: ActorSystem      = SystemBuilder.persistence("ProjectionsSpec")
-  private implicit val mt: ActorMaterializer          = ActorMaterializer()
   private implicit val contextShift: ContextShift[IO] = IO.contextShift(system.dispatcher)
 
   override protected def afterAll(): Unit = {

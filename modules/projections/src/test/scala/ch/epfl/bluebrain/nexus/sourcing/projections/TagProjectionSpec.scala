@@ -5,7 +5,6 @@ import java.util.concurrent.atomic.AtomicLong
 
 import akka.Done
 import akka.cluster.Cluster
-import akka.stream.ActorMaterializer
 import akka.testkit.{TestActorRef, TestKit, TestKitBase}
 import akka.util.Timeout
 import cats.MonadError
@@ -41,7 +40,6 @@ class TagProjectionSpec
 
   implicit lazy val system              = SystemBuilder.cluster("TagProjectionSpec")
   implicit val ec                       = system.dispatcher
-  implicit val mt                       = ActorMaterializer()
   private implicit val timer: Timer[IO] = IO.timer(ec)
 
   val projections = memoize(Projections[IO, Fixture.Event])(IO.ioEffect).unsafeRunSync()

@@ -72,7 +72,7 @@ object StreamSupervisor {
       buildStream()
         .map { stream =>
           val (killSwitch, doneFuture) = stream.run()
-          context.become(running(killSwitch))
+          self ! killSwitch
           doneFuture.pipeTo(self)
           ()
         }
@@ -92,6 +92,8 @@ object StreamSupervisor {
 
     override def receive: Receive = {
       // $COVERAGE-OFF$
+      case killSwitch: UniqueKillSwitch =>
+        context.become(running(killSwitch))
       case Stop =>
         log.info("Received stop signal while waiting for a start value, stopping")
         context.stop(self)

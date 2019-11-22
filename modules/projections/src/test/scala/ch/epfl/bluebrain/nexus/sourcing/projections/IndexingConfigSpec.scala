@@ -5,6 +5,7 @@ import java.io.File
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
+import ch.epfl.bluebrain.nexus.sourcing.projections.IndexingConfig.PersistProgressConfig
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{Matchers, OptionValues, WordSpecLike}
 import pureconfig.generic.auto._
@@ -21,7 +22,8 @@ class IndexingConfigSpec
   val config = IndexingConfig(
     10,
     40 millis,
-    RetryStrategyConfig("exponential", 100 milliseconds, 10 hours, 7, 0.5, 500 milliseconds)
+    RetryStrategyConfig("exponential", 100 milliseconds, 10 hours, 7, 5 seconds),
+    PersistProgressConfig(1000, 5 seconds)
   )
 
   "IndexingConfig" should {

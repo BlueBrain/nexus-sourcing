@@ -5,11 +5,11 @@ import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.persistence.cassandra.CassandraPluginConfig
 import akka.persistence.cassandra.session.scaladsl.CassandraSession
-import akka.persistence.query.{Sequence, TimeBasedUUID}
+import akka.persistence.query.Offset
 import akka.stream.scaladsl.Source
 import cats.effect._
 import cats.implicits._
-import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.{NoProgress, OffsetProgress}
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import com.datastax.driver.core.Session
 import com.google.common.util.concurrent.ListenableFuture
 import io.circe.parser.decode
@@ -26,7 +26,7 @@ import scala.util.Try
   *
   * Projections replay an event stream
   */
-trait Projections[F[_], E] {
+trait Projections[F[_], A] {
 
   /**
     * Records progress against a projection identifier.
@@ -51,10 +51,11 @@ trait Projections[F[_], E] {
     *
     * @param id            the project identifier
     * @param persistenceId the persistenceId to record
-    * @param progress      the progress to record
-    * @param event         the event to be recorded
+    * @param sequenceNr    the sequence number to record
+    * @param offset        the offset to record
+    * @param value         the value to be recorded
     */
-  def recordFailure(id: String, persistenceId: String, progress: ProjectionProgress, event: E): F[Unit]
+  def recordFailure(id: String, persistenceId: String, sequenceNr: Long, offset: Offset, value: A): F[Unit]
 
   /**
     * An event stream for all failures recorded for a projection.
@@ -62,7 +63,7 @@ trait Projections[F[_], E] {
     * @param id the projection identifier
     * @return a source of the failed events
     */
-  def failures(id: String): Source[(E, ProjectionProgress), _]
+  def failures(id: String): Source[(A, Offset), _]
 }
 
 object Projections {
@@ -72,9 +73,9 @@ object Projections {
     *
     * @param session the cassandra session used by the projection
     */
-  def apply[F[_], E: Encoder: Decoder](
+  def apply[F[_], A: Encoder: Decoder](
       session: CassandraSession
-  )(implicit as: ActorSystem, F: Async[F]): F[Projections[F, E]] = {
+  )(implicit as: ActorSystem, F: Async[F]): F[Projections[F, A]] = {
     val statements = new Statements(as)
     val cfg        = lookupConfig(as)
     ensureInitialized(session, cfg, statements) >> F.delay(new CassandraProjections(session, statements))
@@ -83,7 +84,7 @@ object Projections {
   /**
     * Creates a delayed projections module. The underlying cassandra session is created automatically.
     */
-  def apply[F[_], E: Encoder: Decoder](implicit as: ActorSystem, F: Async[F]): F[Projections[F, E]] =
+  def apply[F[_], A: Encoder: Decoder](implicit as: ActorSystem, F: Async[F]): F[Projections[F, A]] =
     createSession[F].flatMap(session => apply(session))
 
   private class Statements(as: ActorSystem) {
@@ -100,33 +101,33 @@ object Projections {
 
     val createProgressTable: String =
       s"""CREATE TABLE IF NOT EXISTS $keyspace.$progressTable (
-         |projectionId varchar primary key, progress text)""".stripMargin
+         |projection_id varchar primary key, progress text)""".stripMargin
 
     val createFailuresTable: String =
       s"""CREATE TABLE IF NOT EXISTS $keyspace.$failuresTable (
-         |projectionId varchar, offset bigint, persistenceId text, progress text, event text,
-         |PRIMARY KEY (projectionId, offset, persistenceId))
+         |projection_id varchar, offset text, persistence_id text, sequence_nr bigint, value text,
+         |PRIMARY KEY (projection_id, offset, persistence_id, sequence_nr))
          |WITH CLUSTERING ORDER BY (offset ASC)""".stripMargin
 
     val recordProgressQuery: String =
-      s"UPDATE $keyspace.$progressTable SET progress = ? WHERE projectionId = ?"
+      s"UPDATE $keyspace.$progressTable SET progress = ? WHERE projection_id = ?"
 
     val progressQuery: String =
-      s"SELECT progress FROM $keyspace.$progressTable WHERE projectionId = ?"
+      s"SELECT progress FROM $keyspace.$progressTable WHERE projection_id = ?"
 
     val recordFailureQuery: String =
-      s"""INSERT INTO $keyspace.$failuresTable (projectionId, offset, persistenceId, progress, event)
+      s"""INSERT INTO $keyspace.$failuresTable (projection_id, offset, persistence_id, sequence_nr, value)
          |VALUES (?, ?, ?, ?, ?) IF NOT EXISTS""".stripMargin
 
     val failuresQuery: String =
-      s"SELECT progress, event from $keyspace.$failuresTable WHERE projectionId = ? ALLOW FILTERING"
+      s"SELECT offset, value from $keyspace.$failuresTable WHERE projection_id = ? ALLOW FILTERING"
   }
 
-  private class CassandraProjections[F[_], E: Encoder: Decoder](
+  private class CassandraProjections[F[_], A: Encoder: Decoder](
       session: CassandraSession,
       stmts: Statements
   )(implicit as: ActorSystem, F: Async[F])
-      extends Projections[F, E] {
+      extends Projections[F, A] {
     import as.dispatcher
     override def recordProgress(id: String, progress: ProjectionProgress): F[Unit] =
       wrapFuture(session.executeWrite(stmts.recordProgressQuery, progress.asJson.noSpaces, id)) >> F.unit
@@ -137,35 +138,29 @@ object Projections {
         case None      => F.pure(NoProgress)
       }
 
-    override def recordFailure(id: String, persistenceId: String, progress: ProjectionProgress, event: E): F[Unit] =
+    override def recordFailure(id: String, persistenceId: String, sequenceNr: Long, offset: Offset, value: A): F[Unit] =
       wrapFuture(
         session.executeWrite(
           stmts.recordFailureQuery,
           id,
-          toOffset(progress),
+          offset.asJson.noSpaces,
           persistenceId,
-          progress.asJson.noSpaces,
-          event.asJson.noSpaces
+          sequenceNr: java.lang.Long,
+          value.asJson.noSpaces
         )
       ) >> F.unit
 
-    override def failures(id: String): Source[(E, ProjectionProgress), _] =
+    override def failures(id: String): Source[(A, Offset), _] =
       session
         .select(stmts.failuresQuery, id)
         .map { row =>
-          (decode[E](row.getString("event")), decode[ProjectionProgress](row.getString("progress"))).tupled
+          (decode[A](row.getString("value")), decode[Offset](row.getString("offset"))).tupled
         }
         .collect { case Right(value) => value }
-
-    private def toOffset(progress: ProjectionProgress): java.lang.Long = progress match {
-      case OffsetProgress(seq: Sequence, _, _)       => seq.value
-      case OffsetProgress(uuid: TimeBasedUUID, _, _) => uuid.value.timestamp()
-      case _                                         => 0L
-    }
   }
 
   private def wrapFuture[F[_]: LiftIO, A](f: => Future[A])(implicit ec: ExecutionContextExecutor): F[A] = {
-    implicit val contextShift = IO.contextShift(ec)
+    implicit val contextShift: ContextShift[IO] = IO.contextShift(ec)
     IO.fromFuture(IO(f)).to[F]
   }
 

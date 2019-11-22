@@ -5,8 +5,6 @@ import akka.persistence.query.Offset
 import akka.stream.scaladsl.Source
 import akka.testkit.{TestKit, TestKitBase}
 import cats.effect.{ContextShift, IO}
-import ch.epfl.bluebrain.nexus.commons.test.Randomness
-import ch.epfl.bluebrain.nexus.commons.test.io.IOValues
 import ch.epfl.bluebrain.nexus.sourcing.projections.Fixture.memoize
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionsSpec.SomeEvent
@@ -22,8 +20,8 @@ class ProjectionsSpec
     extends TestKitBase
     with WordSpecLike
     with Matchers
+    with TestHelpers
     with IOValues
-    with Randomness
     with Eventually
     with BeforeAndAfterAll {
 
@@ -39,7 +37,7 @@ class ProjectionsSpec
     val id            = genString()
     val persistenceId = s"/some/${genString()}"
     val projections   = memoize(Projections[IO, SomeEvent]).unsafeRunSync()
-    val progress      = OffsetProgress(Offset.sequence(42), 42, 42)
+    val progress      = OffsetProgress(Offset.sequence(42), 42, 42, 0)
 
     "store progress" in {
       projections.ioValue.recordProgress(id, progress).ioValue
@@ -53,21 +51,21 @@ class ProjectionsSpec
       projections.ioValue.progress(genString()).ioValue shouldEqual NoProgress
     }
 
-    val firstProgress  = OffsetProgress(Offset.sequence(42), 1L, 0L)
-    val secondProgress = OffsetProgress(Offset.sequence(98), 2L, 3L)
-    val firstEvent     = SomeEvent(1L, "description")
-    val secondEvent    = SomeEvent(2L, "description2")
+    val firstOffset: Offset  = Offset.sequence(42)
+    val secondOffset: Offset = Offset.sequence(98)
+    val firstEvent           = SomeEvent(1L, "description")
+    val secondEvent          = SomeEvent(2L, "description2")
 
     "store an event" in {
-      projections.ioValue.recordFailure(id, persistenceId, firstProgress, firstEvent).ioValue
+      projections.ioValue.recordFailure(id, persistenceId, 1L, firstOffset, firstEvent).ioValue
     }
 
     "store another event" in {
-      projections.ioValue.recordFailure(id, persistenceId, secondProgress, secondEvent).ioValue
+      projections.ioValue.recordFailure(id, persistenceId, 2L, secondOffset, secondEvent).ioValue
     }
 
     "retrieve stored events" in {
-      val expected = Seq((firstEvent, firstProgress), (secondEvent, secondProgress))
+      val expected = Seq((firstEvent, firstOffset), (secondEvent, secondOffset))
       eventually {
         logOf(projections.ioValue.failures(id)) should contain theSameElementsInOrderAs expected
       }
@@ -81,8 +79,8 @@ class ProjectionsSpec
 
   }
 
-  private def logOf(source: Source[(SomeEvent, ProjectionProgress), _]): Vector[(SomeEvent, ProjectionProgress)] = {
-    val f = source.runFold(Vector.empty[(SomeEvent, ProjectionProgress)])(_ :+ _)
+  private def logOf(source: Source[(SomeEvent, Offset), _]): Vector[(SomeEvent, Offset)] = {
+    val f = source.runFold(Vector.empty[(SomeEvent, Offset)])(_ :+ _)
     IO.fromFuture(IO(f)).ioValue
   }
 

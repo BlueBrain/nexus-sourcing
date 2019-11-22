@@ -52,66 +52,45 @@ object StreamSupervisor {
   /**
     * Actor implementation that builds and manages a stream ([[RunnableGraph]]).
     *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
+    * @param sourceF a source wrapped on the effect type F[_]
     */
-  class StreamSupervisorActor[F[_], A: ClassTag](init: F[A], source: A => Source[A, _])(implicit F: Effect[F])
+  class StreamSupervisorActor[F[_], A](sourceF: F[Source[A, _]])(implicit F: Effect[F])
       extends Actor
       with ActorLogging {
 
-    private val A                             = implicitly[ClassTag[A]]
     private implicit val as: ActorSystem      = context.system
     private implicit val ec: ExecutionContext = as.dispatcher
     //noinspection ActorMutableStateInspection
     private var state: Option[A] = None
-
-    private def initialize(): Unit = {
-      val logError: PartialFunction[Throwable, F[Unit]] = {
-        case err =>
-          log.error(err, "Failed on initialize function with error '{}'", err.getMessage)
-          F.raiseError(err)
-      }
-      val _ = init.map(Start).onError(logError).toIO.unsafeToFuture() pipeTo self
-    }
 
     override def preStart(): Unit = {
       super.preStart()
       initialize()
     }
 
-    private def buildStream(a: A): RunnableGraph[(UniqueKillSwitch, Future[Done])] = {
-      source(a)
-        .viaMat(KillSwitches.single)(Keep.right)
-        .map { latest =>
-          state = Some(latest)
-          latest
+    def initialize(): Unit =
+      buildStream()
+        .map { stream =>
+          val (killSwitch, doneFuture) = stream.run()
+          context.become(running(killSwitch))
+          doneFuture.pipeTo(self)
+          ()
         }
-        .toMat(Sink.ignore)(Keep.both)
-    }
+        .toIO
+        .unsafeRunAsyncAndForget()
+
+    private def buildStream(): F[RunnableGraph[(UniqueKillSwitch, Future[Done])]] =
+      sourceF.map { source =>
+        source
+          .viaMat(KillSwitches.single)(Keep.right)
+          .map { latest =>
+            state = Some(latest)
+            latest
+          }
+          .toMat(Sink.ignore)(Keep.both)
+      }
 
     override def receive: Receive = {
-      case Start(any) =>
-        any match {
-          case A(a) =>
-            log.info(
-              "Received initial start value of type '{}', with value '{}' running the indexing function across the element stream",
-              A.runtimeClass.getSimpleName,
-              a
-            )
-            state = Some(a)
-            val (killSwitch, doneFuture) = buildStream(a).run()
-            doneFuture pipeTo self
-            context.become(running(killSwitch))
-          // $COVERAGE-OFF$
-          case _ =>
-            log.error(
-              "Received unknown initial start value '{}', expecting type '{}', stopping",
-              any,
-              A.runtimeClass.getSimpleName
-            )
-            context.stop(self)
-          // $COVERAGE-ON$
-        }
       // $COVERAGE-OFF$
       case Stop =>
         log.info("Received stop signal while waiting for a start value, stopping")
@@ -157,102 +136,82 @@ object StreamSupervisor {
   /**
     * Builds a [[Props]] for a [[StreamSupervisorActor]] with its configuration.
     *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
+    * @param sourceF a stream wrapped in an effect type
     */
   // $COVERAGE-OFF$
-  final def props[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _]): Props =
-    Props(new StreamSupervisorActor(init, source))
+  private def props[F[_]: Effect, A](sourceF: F[Source[A, _]]): Props =
+    Props(new StreamSupervisorActor(sourceF))
 
-  /**
-    * Builds a [[StreamSupervisor]].
-    *
-    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source  an initialization function that produces a stream from an initial start value
-    * @param name    the actor name
-    * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
-    */
-  final def start[F[_]: Effect, A: ClassTag](
-      init: F[A],
-      source: A => Source[A, _],
-      name: String,
-      actorOf: (Props, String) => ActorRef
-  )(
-      implicit as: ActorSystem,
-      config: SourcingConfig
-  ): StreamSupervisor[F, A] =
-    new StreamSupervisor[F, A](actorOf(props(init, source), name))
-
-  /**
-    * Builds a [[StreamSupervisor]].
-    *
-    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source  an initialization function that produces a stream from an initial start value
-    * @param name    the actor name
-    * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
-    */
-  final def delay[F[_]: Effect, A: ClassTag](
-      init: F[A],
-      source: A => Source[A, _],
-      name: String,
-      actorOf: (Props, String) => ActorRef
-  )(
-      implicit as: ActorSystem,
-      config: SourcingConfig
-  ): F[StreamSupervisor[F, A]] =
-    Effect[F].delay(start(init, source, name, actorOf))
-
-  /**
-    * Builds a [[Props]] for a [[StreamSupervisorActor]] with it cluster singleton configuration.
-    *
-    * @param init   an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source an initialization function that produces a stream from an initial start value
-    */
-  final def singletonProps[F[_]: Effect, A: ClassTag](init: F[A], source: A => Source[A, _])(
+  private def singletonProps[F[_]: Effect, A](sourceF: F[Source[A, _]])(
       implicit as: ActorSystem
   ): Props =
     ClusterSingletonManager.props(
-      Props(new StreamSupervisorActor(init, source)),
+      Props(new StreamSupervisorActor(sourceF)),
       terminationMessage = Stop,
       settings = ClusterSingletonManagerSettings(as)
     )
 
   /**
-    * Builds a  [[StreamSupervisor]] based on a cluster singleton actor.
+    * Builds a [[StreamSupervisor]].
     *
-    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source  an initialization function that produces a stream from an initial start value
+    * @param sourceF a stream wrapped in an effect type
+    * @param name    the actor name
+    */
+  final def start[F[_]: Effect, A](
+      sourceF: F[Source[A, _]],
+      name: String
+  )(
+      implicit as: ActorSystem,
+      config: SourcingConfig
+  ): StreamSupervisor[F, A] =
+    start(sourceF, name, as.actorOf)
+
+  /**
+    * Builds a [[StreamSupervisor]].
+    *
+    * @param sourceF a stream wrapped in an effect type
     * @param name    the actor name
     * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
     */
-  final def startSingleton[F[_]: Effect, A: ClassTag](
-      init: F[A],
-      source: A => Source[A, _],
+  final def start[F[_]: Effect, A](
+      sourceF: F[Source[A, _]],
       name: String,
       actorOf: (Props, String) => ActorRef
   )(
       implicit as: ActorSystem,
       config: SourcingConfig
   ): StreamSupervisor[F, A] =
-    new StreamSupervisor[F, A](actorOf(singletonProps(init, source), name))
+    new StreamSupervisor[F, A](actorOf(props(sourceF), name))
 
   /**
-    * Builds a  [[StreamSupervisor]] based on a cluster singleton actor.
+    * Builds a [[StreamSupervisor]] based on a cluster singleton actor.
     *
-    * @param init    an initialization function to be run when the actor starts, or when the stream is restarted
-    * @param source  an initialization function that produces a stream from an initial start value
+    * @param sourceF a stream wrapped in an effect type
+    * @param name    the actor name
+    */
+  final def startSingleton[F[_]: Effect, A](
+      sourceF: F[Source[A, _]],
+      name: String
+  )(
+      implicit as: ActorSystem,
+      config: SourcingConfig
+  ): StreamSupervisor[F, A] =
+    start(sourceF, name, as.actorOf)
+
+  /**
+    * Builds a [[StreamSupervisor]] based on a cluster singleton actor.
+    *
+    * @param sourceF a stream wrapped in an effect type
     * @param name    the actor name
     * @param actorOf a function that given an actor Props and a name it instantiates an ActorRef
     */
-  final def delaySingleton[F[_]: Effect, A: ClassTag](
-      init: F[A],
-      source: A => Source[A, _],
+  final def startSingleton[F[_]: Effect, A](
+      sourceF: F[Source[A, _]],
       name: String,
       actorOf: (Props, String) => ActorRef
   )(
       implicit as: ActorSystem,
       config: SourcingConfig
-  ): F[StreamSupervisor[F, A]] =
-    Effect[F].delay(startSingleton(init, source, name, actorOf))
-  // $COVERAGE-ON$
+  ): StreamSupervisor[F, A] =
+    new StreamSupervisor[F, A](actorOf(singletonProps(sourceF), name))
 }

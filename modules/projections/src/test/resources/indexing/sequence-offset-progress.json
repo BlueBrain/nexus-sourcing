@@ -3,7 +3,8 @@
     "type": "Sequence",
     "value": 14
   },
-  "processedCount": 1,
-  "discardedCount": 0,
+  "processed": 2,
+  "failed": 1,
+  "discarded": 0,
   "type": "OffsetProgress"
 }

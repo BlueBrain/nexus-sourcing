@@ -10,12 +10,13 @@ import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
 import akka.routing.ConsistentHashingPool
 import akka.util.Timeout
-import cats.effect.{Async, ContextShift, Effect, IO}
 import cats.syntax.all._
+import cats.effect.{ContextShift, Effect, IO}
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
-import ch.epfl.bluebrain.nexus.sourcing.retry.Retry
-import ch.epfl.bluebrain.nexus.sourcing.retry.syntax._
+import retry.RetryPolicy
+import retry._
+import retry.syntax.all._
 
 import scala.reflect.ClassTag
 
@@ -26,7 +27,6 @@ import scala.reflect.ClassTag
   * @param name      name of the aggregate (aggregates with the same name are part of the same group or share the
   *                  same "type")
   * @param selection an actor selection strategy for a name and an identifier
-  * @param retry     a strategy for retrying operations that fail unexpectedly
   * @param config    the sourcing configuration
   * @param as        the actor system used to run the actors
   * @tparam F         [_]       the aggregate log effect type
@@ -35,20 +35,18 @@ import scala.reflect.ClassTag
   * @tparam Command   the command type
   * @tparam Rejection the rejection type
   */
-class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] private[akka] (
+class AkkaAggregate[F[_]: Sleep, Event: ClassTag, State, Command, Rejection] private[akka] (
     override val name: String,
     selection: ActorRefSelection[F],
-    retry: Retry[F, Throwable],
     config: AkkaSourcingConfig
-)(implicit as: ActorSystem)
+)(implicit F: Effect[F], as: ActorSystem, policy: RetryPolicy[F])
     extends Aggregate[F, String, Event, State, Command, Rejection] {
 
-  private implicit val timeout: Timeout               = config.askTimeout
-  private implicit val r: Retry[F, Throwable]         = retry
-  private implicit val contextShift: ContextShift[IO] = IO.contextShift(as.dispatcher)
+  private implicit val timeout: Timeout                      = config.askTimeout
+  private implicit val contextShift: ContextShift[IO]        = IO.contextShift(as.dispatcher)
+  private implicit def noop[A]: (A, RetryDetails) => F[Unit] = retry.noop[F, A]
 
   private val Event = implicitly[ClassTag[Event]]
-  private val F     = implicitly[Async[F]]
   private val pq    = PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](config.readJournalPluginId)
 
   override def evaluate(id: String, command: Command): F[Either[Rejection, (State, Event)]] =
@@ -81,7 +79,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
           case cee: CommandEvaluationError[_]   => F.raiseError(cee)
           case other                            => F.raiseError(TypeError(id, Reply.runtimeClass.getSimpleName, other))
         }
-        .retry
+        .retryingOnAllErrors[Throwable]
     }
 
   override def foldLeft[B](id: String, z: B)(f: (B, Event) => B): F[B] = {
@@ -93,7 +91,7 @@ class AkkaAggregate[F[_]: Async, Event: ClassTag, State, Command, Rejection] pri
           case _         => acc
         }
       }
-    IO.fromFuture(IO(future)).to[F].retry
+    IO.fromFuture(IO(future)).to[F].retryingOnAllErrors[Throwable]
   }
 }
 
@@ -110,8 +108,6 @@ final class AggregateTree[F[_]] {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
-    *                            in case of failures
     * @param config              the sourcing configuration
     * @param poolSize            the size of the consistent hashing pool of persistent actor supervisors
     * @param F                   the aggregate effect type
@@ -128,15 +124,16 @@ final class AggregateTree[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int
   )(
       implicit
       F: Effect[F],
+      S: Sleep[F],
+      policy: RetryPolicy[F],
       as: ActorSystem
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
-    AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, retry, config, poolSize)
+    AkkaAggregate.treeF(name, initialState, next, evaluate, passivationStrategy, config, poolSize)
 }
 
 final class AggregateSharded[F[_]] {
@@ -152,8 +149,6 @@ final class AggregateSharded[F[_]] {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
-    *                            in case of failures
     * @param config              the sourcing configuration
     * @param shards              the number of shards to distribute across the cluster
     * @param shardingSettings    the sharding configuration
@@ -171,13 +166,14 @@ final class AggregateSharded[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
   )(
       implicit
       F: Effect[F],
+      S: Sleep[F],
+      policy: RetryPolicy[F],
       as: ActorSystem
   ): F[Aggregate[F, String, Event, State, Command, Rejection]] =
     AkkaAggregate.shardedF(
@@ -186,7 +182,6 @@ final class AggregateSharded[F[_]] {
       next,
       evaluate,
       passivationStrategy,
-      retry,
       config,
       shards,
       shardingSettings
@@ -217,8 +212,6 @@ object AkkaAggregate {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
-    *                            in case of failures
     * @param config              the sourcing configuration
     * @param poolSize            the size of the consistent hashing pool of persistent actor supervisors
     * @param as                  the underlying actor system
@@ -229,23 +222,22 @@ object AkkaAggregate {
     * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
-  def treeF[F[_]: Effect, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
+  def treeF[F[_]: Effect: Sleep, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
       name: String,
       initialState: State,
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       poolSize: Int
-  )(implicit as: ActorSystem): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
+  )(implicit as: ActorSystem, policy: RetryPolicy[F]): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val F = implicitly[Effect[F]]
     F.delay {
       val props  = AggregateActor.parentProps(name, initialState, next, evaluate, passivationStrategy, config)
       val parent = as.actorOf(ConsistentHashingPool(poolSize).props(props), name)
       // route all messages through the parent pool
       val selection = ActorRefSelection.const(parent)
-      new AkkaAggregate(name, selection, retry, config)
+      new AkkaAggregate(name, selection, config)
     }
   }
 
@@ -271,8 +263,6 @@ object AkkaAggregate {
     * @param evaluate            command evaluation function; represented as a function that returns the evaluation in
     *                            an arbitrary effect type; may be asynchronous
     * @param passivationStrategy strategy that defines how persistent actors should shutdown
-    * @param retry               strategy that defines how command evaluations and internal messaging should be retried
-    *                            in case of failures
     * @param config              the sourcing configuration
     * @param shards              the number of shards to distribute across the cluster
     * @param shardingSettings    the sharding configuration
@@ -284,17 +274,16 @@ object AkkaAggregate {
     * @tparam Rejection the aggregate rejection type
     */
   @SuppressWarnings(Array("MaxParameters"))
-  def shardedF[F[_]: Effect, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
+  def shardedF[F[_]: Effect: Sleep, Event: ClassTag, State: ClassTag, Command: ClassTag, Rejection: ClassTag](
       name: String,
       initialState: State,
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      retry: Retry[F, Throwable],
       config: AkkaSourcingConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
-  )(implicit as: ActorSystem): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
+  )(implicit as: ActorSystem, policy: RetryPolicy[F]): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val settings = shardingSettings.getOrElse(ClusterShardingSettings(as))
     val shardExtractor: ExtractShardId = {
       case msg: Msg => math.abs(msg.id.hashCode) % shards toString
@@ -308,7 +297,7 @@ object AkkaAggregate {
       val ref   = ClusterSharding(as).start(name, props, settings, entityExtractor, shardExtractor)
       // route all messages through the sharding coordination
       val selection = ActorRefSelection.const(ref)
-      new AkkaAggregate(name, selection, retry, config)
+      new AkkaAggregate(name, selection, config)
     }
   }
 

@@ -5,12 +5,11 @@ import ch.epfl.bluebrain.nexus.sourcing.AggregateFixture._
 import ch.epfl.bluebrain.nexus.sourcing.Command.{Increment, IncrementAsync, Initialize}
 import ch.epfl.bluebrain.nexus.sourcing.Event.{Incremented, Initialized}
 import ch.epfl.bluebrain.nexus.sourcing.State.Current
-import org.scalatest.{EitherValues, Matchers, WordSpecLike}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues {
+class InMemoryAggregateSpec extends SourcingSpec {
 
   implicit val ctx: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit val timer: Timer[IO]      = IO.timer(ExecutionContext.global)
@@ -26,12 +25,11 @@ class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues
     }
 
     "update its state when accepting commands" in {
-      agg.evaluateE(1, Increment(0, 2)).unsafeRunSync().right.value shouldEqual Incremented(1, 2)
+      agg.evaluateE(1, Increment(0, 2)).unsafeRunSync().rightValue shouldEqual Incremented(1, 2)
       agg
-        .evaluate(1, IncrementAsync(1, 5, 200 millis))
+        .evaluate(1, IncrementAsync(1, 5, 200.millis))
         .unsafeRunSync()
-        .right
-        .value shouldEqual (Current(2, 7) -> Incremented(2, 5))
+        .rightValue shouldEqual (Current(2, 7) -> Incremented(2, 5))
       agg.currentState(1).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
@@ -40,22 +38,22 @@ class InMemoryAggregateSpec extends WordSpecLike with Matchers with EitherValues
     }
 
     "test without applying changes" in {
-      agg.test(1, Initialize(0)).unsafeRunSync().left.value
-      agg.testE(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
-      agg.testS(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Current(3, 0)
+      agg.test(1, Initialize(0)).unsafeRunSync().leftValue
+      agg.testE(1, Initialize(2)).unsafeRunSync().rightValue shouldEqual Initialized(3)
+      agg.testS(1, Initialize(2)).unsafeRunSync().rightValue shouldEqual Current(3, 0)
       agg.currentState(1).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
     "not update its state if evaluation fails" in {
-      agg.evaluate(1, Initialize(0)).unsafeRunSync().left.value
+      agg.evaluate(1, Initialize(0)).unsafeRunSync().leftValue
       agg.currentState(1).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
     "evaluate commands one at a time" in {
-      agg.evaluateS(1, Initialize(2)).unsafeRunSync().right.value shouldEqual Current(3, 0)
+      agg.evaluateS(1, Initialize(2)).unsafeRunSync().rightValue shouldEqual Current(3, 0)
       agg.currentState(1).unsafeRunSync() shouldEqual Current(3, 0)
-      agg.evaluateS(1, IncrementAsync(3, 2, 300 millis)).unsafeToFuture()
-      agg.evaluateE(1, IncrementAsync(4, 2, 20 millis)).unsafeRunSync().right.value shouldEqual Incremented(5, 2)
+      agg.evaluateS(1, IncrementAsync(3, 2, 300.millis)).unsafeToFuture()
+      agg.evaluateE(1, IncrementAsync(4, 2, 20.millis)).unsafeRunSync().rightValue shouldEqual Incremented(5, 2)
       agg.currentState(1).unsafeRunSync() shouldEqual Current(5, 4)
     }
 

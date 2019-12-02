@@ -7,7 +7,9 @@ import akka.testkit.TestKit
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.IndexingConfig.PersistProgressConfig
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{Matchers, OptionValues, WordSpecLike}
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.OptionValues
+import org.scalatest.matchers.should.Matchers
 import pureconfig.generic.auto._
 import pureconfig.ConfigSource
 
@@ -15,15 +17,15 @@ import scala.concurrent.duration._
 
 class IndexingConfigSpec
     extends TestKit(ActorSystem("IndexingConfigSpec"))
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with OptionValues {
 
   val config = IndexingConfig(
     10,
-    40 millis,
-    RetryStrategyConfig("exponential", 100 milliseconds, 10 hours, 7, 5 seconds),
-    PersistProgressConfig(1000, 5 seconds)
+    40.millis,
+    RetryStrategyConfig("exponential", 100.milliseconds, 10.hours, 7, 5.seconds),
+    PersistProgressConfig(1000, 5.seconds)
   )
 
   "IndexingConfig" should {

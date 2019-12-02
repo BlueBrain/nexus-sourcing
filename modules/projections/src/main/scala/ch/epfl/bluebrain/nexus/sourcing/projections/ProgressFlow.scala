@@ -12,7 +12,7 @@ import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressFlow.Eval._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressFlow._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.ProgressStatus.Failed
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
-import journal.Logger
+import com.typesafe.scalalogging.Logger
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
@@ -156,7 +156,7 @@ object ProgressFlow {
 
   type PairMsg[A] = Either[Message[Unit], Message[A]]
 
-  private[projections] val log: Logger = Logger[ProgressFlow.type]
+  private[projections] val log = Logger("ProgressFlow")
 
   /**
     * A flow that manages progress (fails and discards). This implementation has the COut[_] as [[cats.Id]],

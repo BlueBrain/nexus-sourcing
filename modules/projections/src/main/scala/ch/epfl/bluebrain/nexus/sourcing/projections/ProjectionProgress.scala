@@ -176,7 +176,7 @@ object ProjectionProgress {
     val empty: OffsetsProgress = OffsetsProgress(Map.empty)
   }
 
-  private implicit val config: Configuration = Configuration.default.withDiscriminator("type")
+  private[projections] implicit val config: Configuration = Configuration.default.withDiscriminator("type")
 
   final implicit val sequenceEncoder: Encoder[Sequence] = Encoder.instance { seq =>
     Json.obj("value" -> Json.fromLong(seq.value))

@@ -5,9 +5,11 @@ import java.util.UUID
 import akka.persistence.query.{Sequence, TimeBasedUUID}
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import io.circe.Encoder
-import org.scalatest.{EitherValues, Inspectors, Matchers, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.{EitherValues, Inspectors}
 
-class ProjectionProgressSpec extends WordSpecLike with Matchers with Inspectors with TestHelpers with EitherValues {
+class ProjectionProgressSpec extends AnyWordSpecLike with Matchers with Inspectors with TestHelpers with EitherValues {
 
   "A ProjectionProgress" should {
     val mapping = Map(
@@ -31,7 +33,7 @@ class ProjectionProgressSpec extends WordSpecLike with Matchers with Inspectors 
     "properly decode progress values" in {
       forAll(mapping.toList) {
         case (prog, repr) =>
-          repr.as[ProjectionProgress].right.value shouldEqual prog
+          repr.as[ProjectionProgress].rightValue shouldEqual prog
       }
     }
 

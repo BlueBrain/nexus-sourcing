@@ -1,5 +1,6 @@
 package ch.epfl.bluebrain.nexus.sourcing.projections
 
+import ch.epfl.bluebrain.nexus.sourcing.SourcingSpec
 import io.circe.Json
 import io.circe.parser.parse
 
@@ -7,7 +8,7 @@ import scala.annotation.tailrec
 import scala.io.Source
 import scala.util.Random
 
-trait TestHelpers {
+trait TestHelpers extends SourcingSpec {
 
   /**
     * Generates an arbitrary string. Ported from nexus-commons

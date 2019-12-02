@@ -12,14 +12,16 @@ import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressFlowSpec._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.{NoProgress, OffsetProgress, OffsetsProgress}
 import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito, Mockito}
 import org.scalatest.concurrent.{Eventually, ScalaFutures}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, Matchers, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration._
 
 class ProgressFlowSpec
     extends ActorSystemFixture("ProgressFlowSpec")
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with TestHelpers
     with BeforeAndAfter
@@ -29,12 +31,12 @@ class ProgressFlowSpec
     with BeforeAndAfterAll
     with ScalaFutures {
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig(15 second, 50 milliseconds)
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig(15.second, 50.milliseconds)
 
   implicit val ec: ExecutionContextExecutor = system.dispatcher
   private implicit val projections          = mock[Projections[IO, String]]
   private implicit val timer: Timer[IO]     = IO.timer(system.dispatcher)
-  private implicit val config               = PersistProgressConfig(2, 1 minute)
+  private implicit val config               = PersistProgressConfig(2, 1.minute)
 
   before {
     Mockito.reset(projections)
@@ -60,7 +62,7 @@ class ProgressFlowSpec
       }
       .flatten
 
-    val source: Source[EventEnvelope, _]   = Source(envelopes).throttle(5, 1 second)
+    val source: Source[EventEnvelope, _]   = Source(envelopes).throttle(5, 1.second)
     val sourceMsg: Source[PairMsg[Any], _] = source.map[PairMsg[Any]](e => Right(Message(e, mainPId)))
 
     def index(pass: Resource => Boolean = _ => true): Resource => IO[Unit] =
@@ -88,7 +90,7 @@ class ProgressFlowSpec
 
       val flow = ProgressFlowElem[IO, Any]
         .collectCast[Event]         // cast Any => Event
-        .groupedWithin(6, 1 second) // batch: List[Event]
+        .groupedWithin(6, 1.second) // batch: List[Event]
         .distinct()                 // remove duplicated persistenceIds: List[Event]
         .mapAsync(toResource { case ev if ev.offset != 2L => ev.toResource }) // convert to resource (None on 2): List[Option[Resource]]
         .collectSome[Resource]                    // Discard None (on 2): List[Resource]
@@ -110,7 +112,7 @@ class ProgressFlowSpec
 
       val flow = ProgressFlowElem[IO, Any]
         .collectCast[Event]         // cast Any => Event
-        .groupedWithin(6, 1 second) // batch: List[Event]
+        .groupedWithin(6, 1.second) // batch: List[Event]
         .distinct()                 // remove duplicated persistenceIds: List[Event]
         .mapAsync(toResource { case ev if ev.offset != 2L => ev.toResource }) // convert to resource (None on 2): List[Option[Resource]]
         .collectSome[Resource]                    // Discard None (on 2): List[Resource]
@@ -137,7 +139,7 @@ class ProgressFlowSpec
         import GraphDSL.Implicits._
         val f1 = ProgressFlowElem[IO, Any]
           .collectCast[Event]         // cast Any => Event
-          .groupedWithin(4, 1 second) // batch: List[Event]
+          .groupedWithin(4, 1.second) // batch: List[Event]
           .distinct()                 // remove duplicated persistenceIds: List[Event]
           .mapAsync(toResource { case ev if ev.offset != 2L => ev.toResource }) // convert to resource (None on 2): List[Option[Resource]]
           .collectSome[Resource]            // Discard None (on 2): List[Resource]
@@ -197,7 +199,7 @@ class ProgressFlowSpec
         import GraphDSL.Implicits._
         val f1 = ProgressFlowElem[IO, Any]
           .collectCast[Event]         // cast Any => Event
-          .groupedWithin(4, 1 second) // batch: List[Event]
+          .groupedWithin(4, 1.second) // batch: List[Event]
           .distinct()                 // remove duplicated persistenceIds: List[Event]
           .mapAsync(toResource { case ev if ev.offset != 2L => ev.toResource }) // convert to resource (None on 2): List[Option[Resource]]
           .collectSome[Resource]                                    // Discard None (on 2): List[Resource]

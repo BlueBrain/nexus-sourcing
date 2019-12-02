@@ -10,7 +10,9 @@ import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionsSpec.SomeEvent
 import io.circe.generic.auto._
 import org.scalatest.concurrent.Eventually
-import org.scalatest.{BeforeAndAfterAll, DoNotDiscover, Matchers, WordSpecLike}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.{BeforeAndAfterAll, DoNotDiscover}
 
 import scala.concurrent.duration._
 
@@ -18,7 +20,7 @@ import scala.concurrent.duration._
 @DoNotDiscover
 class ProjectionsSpec
     extends TestKitBase
-    with WordSpecLike
+    with AnyWordSpecLike
     with Matchers
     with TestHelpers
     with IOValues
@@ -85,7 +87,7 @@ class ProjectionsSpec
   }
 
   override implicit def patienceConfig: PatienceConfig =
-    PatienceConfig(30 seconds, 50 milliseconds)
+    PatienceConfig(30.seconds, 50.milliseconds)
 }
 
 object ProjectionsSpec {

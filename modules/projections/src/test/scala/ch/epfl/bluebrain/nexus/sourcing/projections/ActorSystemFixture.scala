@@ -4,16 +4,17 @@ import akka.actor.ActorSystem
 import akka.cluster.Cluster
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.PatienceConfiguration
 import org.scalatest.concurrent.ScalaFutures._
-import org.scalatest.{BeforeAndAfterAll, WordSpecLike}
+import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.Promise
 import scala.concurrent.duration._
 
 class ActorSystemFixture(name: String, startCluster: Boolean = false)
     extends TestKit(ActorSystem(name, ConfigFactory.load("service-test.conf")))
-    with WordSpecLike
+    with AnyWordSpecLike
     with PatienceConfiguration
     with BeforeAndAfterAll {
 

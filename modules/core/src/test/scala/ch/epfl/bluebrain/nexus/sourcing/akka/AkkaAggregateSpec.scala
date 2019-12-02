@@ -15,8 +15,8 @@ import ch.epfl.bluebrain.nexus.sourcing.State.Current
 import ch.epfl.bluebrain.nexus.sourcing._
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
 import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, EitherValues, Matchers, WordSpecLike}
 
 import scala.annotation.tailrec
 import scala.concurrent.duration._
@@ -25,13 +25,11 @@ import scala.util.Random
 
 class AkkaAggregateSpec
     extends TestKit(ActorSystem("AkkaAggregateSpec"))
-    with WordSpecLike
-    with Matchers
+    with SourcingSpec
     with BeforeAndAfterAll
-    with ScalaFutures
-    with EitherValues {
+    with ScalaFutures {
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig(1.second.dilated, 30 milliseconds)
+  override implicit def patienceConfig: PatienceConfig = PatienceConfig(1.second.dilated, 30.milliseconds)
 
   implicit val ctx: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
   implicit val ec: ExecutionContext  = system.dispatcher
@@ -40,11 +38,11 @@ class AkkaAggregateSpec
   val config = AkkaSourcingConfig(
     Timeout(1.second.dilated),
     "inmemory-read-journal",
-    200 milliseconds,
+    200.milliseconds,
     ExecutionContext.global
   )
 
-  val neverStrategy: RetryStrategyConfig = RetryStrategyConfig("never", 0 seconds, 0 seconds, 0, 0 seconds)
+  val neverStrategy: RetryStrategyConfig = RetryStrategyConfig("never", 0.seconds, 0.seconds, 0, 0.seconds)
 
   "A sharded AkkaAggregate" when {
 
@@ -115,14 +113,14 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(1)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-success"
-        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10 millis).retryPolicy[IO]
+        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10.millis).retryPolicy[IO]
         val agg = AkkaAggregate
           .sharded[IO](name, initialState, next, f, passivation, config, shards = 10)
           .unsafeRunSync()
 
         val first = genString()
 
-        agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().right.value
+        agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().rightValue
         evaluations.get() shouldEqual 2
       }
 
@@ -130,7 +128,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-failure"
-        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10 millis).retryPolicy[IO]
+        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10.millis).retryPolicy[IO]
         val agg = AkkaAggregate
           .sharded[IO](name, initialState, next, f, passivation, config, shards = 10)
           .unsafeRunSync()
@@ -148,7 +146,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-exponential-retry-failure"
-        implicit val retry   = RetryStrategyConfig("exponential", 10 millis, 10 seconds, 3, 1 second).retryPolicy[IO]
+        implicit val retry   = RetryStrategyConfig("exponential", 10.millis, 10.seconds, 3, 1.second).retryPolicy[IO]
         val agg = AkkaAggregate
           .sharded[IO](name, initialState, next, f, passivation, config, shards = 10)
           .unsafeRunSync()
@@ -234,13 +232,13 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(1)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-success"
-        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10 millis).retryPolicy[IO]
+        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10.millis).retryPolicy[IO]
         val agg = AkkaAggregate
           .tree[IO](name, initialState, next, f, passivation, config, poolSize = 10)
           .unsafeRunSync()
 
         val first = genString()
-        agg.evaluateS(first, Increment(0, 2)).unsafeRunSync().right.value
+        agg.evaluateS(first, Increment(0, 2)).unsafeRunSync().rightValue
         evaluations.get() shouldEqual 2
       }
 
@@ -248,7 +246,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-single-retry-failure"
-        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10 millis).retryPolicy[IO]
+        implicit val retry   = neverStrategy.copy(strategy = "once", initialDelay = 10.millis).retryPolicy[IO]
         val agg = AkkaAggregate
           .tree[IO](name, initialState, next, f, passivation, config, poolSize = 10)
           .unsafeRunSync()
@@ -265,7 +263,7 @@ class AkkaAggregateSpec
         val (evaluations, f) = eval(100)
         val passivation      = PassivationStrategy.never[State, Command]
         val name             = "no-passivation-exponential-retry-failure"
-        implicit val retry   = RetryStrategyConfig("exponential", 10 millis, 10 seconds, 3, 1 second).retryPolicy[IO]
+        implicit val retry   = RetryStrategyConfig("exponential", 10.millis, 10.seconds, 3, 1.second).retryPolicy[IO]
         val agg = AkkaAggregate
           .tree[IO](name, initialState, next, f, passivation, config, poolSize = 10)
           .unsafeRunSync()
@@ -293,8 +291,8 @@ class AkkaAggregateSpec
     }
 
     "update its state when accepting commands" in {
-      agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().right.value shouldEqual Incremented(1, 2)
-      agg.evaluateS(first, IncrementAsync(1, 5, 10 millis)).unsafeRunSync().right.value shouldEqual Current(2, 7)
+      agg.evaluateE(first, Increment(0, 2)).unsafeRunSync().rightValue shouldEqual Incremented(1, 2)
+      agg.evaluateS(first, IncrementAsync(1, 5, 10.millis)).unsafeRunSync().rightValue shouldEqual Current(2, 7)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
@@ -303,22 +301,22 @@ class AkkaAggregateSpec
     }
 
     "test without applying changes" in {
-      agg.testE(first, Initialize(0)).unsafeRunSync().left.value
-      agg.testE(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
-      agg.testS(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Current(3, 0)
+      agg.testE(first, Initialize(0)).unsafeRunSync().leftValue
+      agg.testE(first, Initialize(2)).unsafeRunSync().rightValue shouldEqual Initialized(3)
+      agg.testS(first, Initialize(2)).unsafeRunSync().rightValue shouldEqual Current(3, 0)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
     "not update its state if evaluation fails" in {
-      agg.evaluateS(first, Initialize(0)).unsafeRunSync().left.value
+      agg.evaluateS(first, Initialize(0)).unsafeRunSync().leftValue
       agg.currentState(first).unsafeRunSync() shouldEqual Current(2, 7)
     }
 
     "evaluate commands one at a time" in {
-      agg.evaluateE(first, Initialize(2)).unsafeRunSync().right.value shouldEqual Initialized(3)
+      agg.evaluateE(first, Initialize(2)).unsafeRunSync().rightValue shouldEqual Initialized(3)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(3, 0)
-      agg.evaluateS(first, IncrementAsync(3, 2, 30 millis)).unsafeToFuture()
-      agg.evaluateE(first, IncrementAsync(4, 2, 10 millis)).unsafeRunSync().right.value shouldEqual Incremented(5, 2)
+      agg.evaluateS(first, IncrementAsync(3, 2, 30.millis)).unsafeToFuture()
+      agg.evaluateE(first, IncrementAsync(4, 2, 10.millis)).unsafeRunSync().rightValue shouldEqual Incremented(5, 2)
       agg.currentState(first).unsafeRunSync() shouldEqual Current(5, 4)
     }
 

@@ -95,7 +95,7 @@ object StreamSupervisor {
       case killSwitch: UniqueKillSwitch =>
         context.become(running(killSwitch))
       case Stop =>
-        log.info("Received stop signal while waiting for a start value, stopping")
+        log.debug("Received stop signal while waiting for a start value, stopping")
         context.stop(self)
       // $COVERAGE-ON$
 
@@ -116,7 +116,7 @@ object StreamSupervisor {
         context.become(receive)
       // $COVERAGE-ON$
       case Stop =>
-        log.info("Received stop signal, stopping stream")
+        log.debug("Received stop signal, stopping stream")
         killSwitch.shutdown()
         context.become(stopping)
       case FetchLatestState => sender() ! LatestState(state)
@@ -124,7 +124,7 @@ object StreamSupervisor {
 
     private def stopping: Receive = {
       case Done =>
-        log.info("Stream finished, stopping")
+        log.debug("Stream finished, stopping")
         context.stop(self)
       // $COVERAGE-OFF$
       case Status.Failure(th) =>

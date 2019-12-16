@@ -24,6 +24,13 @@ sealed trait ProjectionProgress extends Product with Serializable {
   def minProgress: SingleProgress
 
   /**
+    * The smallest single progress from the selected progress ids that match the passed filter ''f''
+    *
+    * @param f the progressId filter
+    */
+  def minProgressFilter(f: String => Boolean): SingleProgress
+
+  /**
     * Adds a status
     *
     * @param id       the progress id
@@ -103,6 +110,8 @@ object ProjectionProgress {
 
     def minProgress: SingleProgress = this
 
+    def minProgressFilter(f: String => Boolean): SingleProgress = minProgress
+
     def progress(id: String): SingleProgress = this
 
   }
@@ -146,9 +155,13 @@ object ProjectionProgress {
     */
   final case class OffsetsProgress(progress: OffsetProgressMap) extends ProjectionProgress {
 
+    lazy val minProgress: SingleProgress = minProgressFilter(_ => true)
+
     @SuppressWarnings(Array("UnsafeTraversableMethods"))
-    lazy val minProgress: SingleProgress =
-      if (progress.isEmpty) NoProgress else progress.values.minBy(_.offset)
+    def minProgressFilter(f: String => Boolean): SingleProgress = {
+      val filtered = progress.view.filterKeys(f)
+      if (filtered.isEmpty) NoProgress else filtered.values.minBy(_.offset)
+    }
 
     /**
       * Replaces the passed single projection

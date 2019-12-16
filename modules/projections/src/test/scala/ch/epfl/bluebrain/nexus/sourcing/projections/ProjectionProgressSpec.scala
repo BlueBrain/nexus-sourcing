@@ -53,9 +53,15 @@ class ProjectionProgressSpec extends AnyWordSpecLike with Matchers with Inspecto
 
     "fetch minimum progress" in {
       val progress = OffsetsProgress(
-        Map("one" -> OffsetProgress(Sequence(1L), 2L, 1L, 0L), "other" -> OffsetProgress(Sequence(2L), 10L, 2L, 0L))
+        Map(
+          "one"   -> OffsetProgress(Sequence(1L), 2L, 1L, 0L),
+          "other" -> OffsetProgress(Sequence(2L), 10L, 2L, 0L),
+          "a"     -> OffsetProgress(Sequence(0L), 0L, 0L, 0L)
+        )
       )
-      progress.minProgress shouldEqual OffsetProgress(Sequence(1L), 2L, 1L, 0L)
+      progress.minProgressFilter(_.length > 1) shouldEqual OffsetProgress(Sequence(1L), 2L, 1L, 0L)
+      progress.minProgress shouldEqual OffsetProgress(Sequence(0L), 0L, 0L, 0L)
+
     }
   }
 }

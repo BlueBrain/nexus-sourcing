@@ -1,5 +1,6 @@
 package ch.epfl.bluebrain.nexus.sourcing.projections
 
+import java.time.Instant
 import java.util.UUID
 
 import akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
@@ -270,7 +271,7 @@ object ProjectionProgress {
     */
   implicit val ordering: Ordering[Offset] = {
     case (x: Sequence, y: Sequence)           => x compare y
-    case (x: TimeBasedUUID, y: TimeBasedUUID) => x compare y
+    case (x: TimeBasedUUID, y: TimeBasedUUID) => x.asInstant compareTo y.asInstant
     case (NoOffset, _)                        => -1
     case (_, NoOffset)                        => 1
     case _                                    => 0
@@ -289,5 +290,12 @@ object ProjectionProgress {
       **/
     def gt(offset: Offset): Boolean =
       offset == NoOffset || value > offset
+  }
+
+  private val NUM_100NS_INTERVALS_SINCE_UUID_EPOCH = 0X01B21DD213814000L
+
+  implicit class TimeBasedUUIDSyntax(private val timeBased: TimeBasedUUID) extends AnyVal {
+    def asInstant: Instant =
+      Instant.ofEpochMilli((timeBased.value.timestamp - NUM_100NS_INTERVALS_SINCE_UUID_EPOCH) / 10000)
   }
 }

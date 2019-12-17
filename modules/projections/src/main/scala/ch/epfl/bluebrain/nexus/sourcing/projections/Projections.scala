@@ -9,7 +9,9 @@ import akka.persistence.query.Offset
 import akka.stream.scaladsl.Source
 import cats.effect._
 import cats.implicits._
-import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
+import ch.epfl.bluebrain.nexus.sourcing.projections.instances._
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.NoProgress
 import com.datastax.driver.core.Session
 import com.google.common.util.concurrent.ListenableFuture
 import io.circe.parser.decode

@@ -1,18 +1,13 @@
 package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import java.time.Instant
-import java.util.UUID
-
-import akka.persistence.query.{NoOffset, Offset, Sequence, TimeBasedUUID}
+import akka.persistence.query.{NoOffset, Offset}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.{ProgressStatus, SingleProgress}
+import ch.epfl.bluebrain.nexus.sourcing.projections.instances._
 import io.circe._
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.{deriveConfiguredDecoder, deriveConfiguredEncoder}
 import io.circe.syntax._
-
-import scala.math.Ordering.Implicits._
-import scala.reflect.ClassTag
 
 /**
   * Representation of projection progress.
@@ -192,64 +187,15 @@ object ProjectionProgress {
 
   private[projections] implicit val config: Configuration = Configuration.default.withDiscriminator("type")
 
-  final implicit val sequenceEncoder: Encoder[Sequence] = Encoder.instance { seq =>
-    Json.obj("value" -> Json.fromLong(seq.value))
-  }
+  final implicit val singleProgressEncoder: Encoder[SingleProgress] = deriveConfiguredEncoder[SingleProgress]
+  final implicit val singleProgressDecoder: Decoder[SingleProgress] = deriveConfiguredDecoder[SingleProgress]
 
-  final implicit val sequenceDecoder: Decoder[Sequence] = Decoder.instance { cursor =>
-    cursor.get[Long]("value").map(value => Sequence(value))
-  }
-
-  final implicit val timeBasedUUIDEncoder: Encoder[TimeBasedUUID] = Encoder.instance { uuid =>
-    Json.obj("value" -> Encoder.encodeUUID(uuid.value))
-  }
-
-  final implicit val timeBasedUUIDDecoder: Decoder[TimeBasedUUID] = Decoder.instance { cursor =>
-    cursor.get[UUID]("value").map(uuid => TimeBasedUUID(uuid))
-  }
-
-  final implicit val noOffsetEncoder: Encoder[NoOffset.type] = Encoder.instance(_ => Json.obj())
-
-  final implicit val noOffsetDecoder: Decoder[NoOffset.type] = Decoder.instance { cursor =>
-    cursor.as[JsonObject].map(_ => NoOffset)
-  }
-
-  final implicit val offsetEncoder: Encoder[Offset] = Encoder.instance {
-    case o: Sequence      => encodeDiscriminated(o)
-    case o: TimeBasedUUID => encodeDiscriminated(o)
-    case o: NoOffset.type => encodeDiscriminated(o)
-  }
-
-  final implicit def offsetDecoder(
-      implicit S: ClassTag[Sequence],
-      TBU: ClassTag[TimeBasedUUID],
-      NO: ClassTag[NoOffset.type]
-  ): Decoder[Offset] = {
-    val sequence      = S.runtimeClass.getSimpleName
-    val timeBasedUUID = TBU.runtimeClass.getSimpleName
-    val noOffset      = NO.runtimeClass.getSimpleName
-
-    Decoder.instance { cursor =>
-      cursor.get[String]("type").flatMap {
-        case `sequence`      => cursor.as[Sequence]
-        case `timeBasedUUID` => cursor.as[TimeBasedUUID]
-        case `noOffset`      => cursor.as[NoOffset.type]
-        //       $COVERAGE-OFF$
-        case other => Left(DecodingFailure(s"Unknown discriminator value '$other'", cursor.history))
-        //       $COVERAGE-ON$
-      }
-    }
-  }
-
-  implicit val singleProgressEncoder: Encoder[SingleProgress] = deriveConfiguredEncoder[SingleProgress]
-  implicit val singleProgressDecoder: Decoder[SingleProgress] = deriveConfiguredDecoder[SingleProgress]
-
-  implicit val mapProgressEncoder: Encoder[OffsetProgressMap] = Encoder.instance { m =>
+  final implicit val mapProgressEncoder: Encoder[OffsetProgressMap] = Encoder.instance { m =>
     val jsons = m.map { case (index, projection) => Json.obj("index" -> index.asJson, "value" -> projection.asJson) }
     Json.arr(jsons.toSeq: _*)
   }
 
-  implicit val mapProgressDecoder: Decoder[OffsetProgressMap] =
+  final implicit val mapProgressDecoder: Decoder[OffsetProgressMap] =
     (hc: HCursor) =>
       hc.value.asArray.toRight(DecodingFailure("Expected array was not found", hc.history)).flatMap { arr =>
         arr.foldM[Decoder.Result, OffsetProgressMap](Map.empty[String, SingleProgress]) { (map, c) =>
@@ -260,42 +206,9 @@ object ProjectionProgress {
         }
       }
 
-  implicit val projectionProgressEncoder: Encoder[ProjectionProgress] = deriveConfiguredEncoder[ProjectionProgress]
-  implicit val projectionProgressDecoder: Decoder[ProjectionProgress] = deriveConfiguredDecoder[ProjectionProgress]
+  final implicit val projectionProgressEncoder: Encoder[ProjectionProgress] =
+    deriveConfiguredEncoder[ProjectionProgress]
+  final implicit val projectionProgressDecoder: Decoder[ProjectionProgress] =
+    deriveConfiguredDecoder[ProjectionProgress]
 
-  private def encodeDiscriminated[A: Encoder](a: A)(implicit A: ClassTag[A]) =
-    Encoder[A].apply(a).deepMerge(Json.obj("type" -> Json.fromString(A.runtimeClass.getSimpleName)))
-
-  /**
-    * Offset ordering
-    */
-  implicit val ordering: Ordering[Offset] = {
-    case (x: Sequence, y: Sequence)           => x compare y
-    case (x: TimeBasedUUID, y: TimeBasedUUID) => x.asInstant compareTo y.asInstant
-    case (NoOffset, _)                        => -1
-    case (_, NoOffset)                        => 1
-    case _                                    => 0
-  }
-
-  /**
-    * Syntactic sugar for [[Offset]]
-    */
-  implicit class OffsetSyntax(private val value: Offset) extends AnyVal {
-
-    /**
-      * Offset comparison
-      *
-      * @param offset the offset to compare against the ''value''
-      * @return true when ''value'' is greater than the passed ''offset'' or when offset is ''NoOffset'', false otherwise
-      **/
-    def gt(offset: Offset): Boolean =
-      offset == NoOffset || value > offset
-  }
-
-  private val NUM_100NS_INTERVALS_SINCE_UUID_EPOCH = 0X01B21DD213814000L
-
-  implicit class TimeBasedUUIDSyntax(private val timeBased: TimeBasedUUID) extends AnyVal {
-    def asInstant: Instant =
-      Instant.ofEpochMilli((timeBased.value.timestamp - NUM_100NS_INTERVALS_SINCE_UUID_EPOCH) / 10000)
-  }
 }

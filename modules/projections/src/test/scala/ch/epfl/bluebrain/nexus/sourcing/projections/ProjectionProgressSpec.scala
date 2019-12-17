@@ -4,6 +4,7 @@ import java.util.UUID
 
 import akka.persistence.query.{Offset, Sequence, TimeBasedUUID}
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
+import ch.epfl.bluebrain.nexus.sourcing.projections.implicits._
 import io.circe.Encoder
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -74,7 +75,7 @@ class ProjectionProgressSpec extends AnyWordSpecLike with Matchers with Inspecto
       time2.asInstant.isBefore(time3.asInstant) shouldEqual true
       offset1.gt(offset2) shouldEqual false
       offset3.gt(offset2) shouldEqual true
-      List(time2, time1, time3).sorted(ordering) shouldEqual List(time1, time2, time3)
+      List(time2, time1, time3).sorted(offsetOrdering) shouldEqual List(time1, time2, time3)
     }
   }
 }

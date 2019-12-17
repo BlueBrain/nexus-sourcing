@@ -7,11 +7,12 @@ import cats.effect.syntax.all._
 import cats.effect.{Effect, Timer}
 import cats.implicits._
 import cats.{Id, Traverse}
+import ch.epfl.bluebrain.nexus.sourcing.projections.syntax._
 import ch.epfl.bluebrain.nexus.sourcing.projections.IndexingConfig.PersistProgressConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressFlow.Eval._
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProgressFlow._
+import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.NoProgress
 import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress.ProgressStatus.Failed
-import ch.epfl.bluebrain.nexus.sourcing.projections.ProjectionProgress._
 import com.typesafe.scalalogging.Logger
 
 import scala.concurrent.duration.FiniteDuration

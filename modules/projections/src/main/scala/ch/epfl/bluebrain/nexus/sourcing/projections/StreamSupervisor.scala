@@ -10,7 +10,6 @@ import akka.util.Timeout
 import cats.effect.syntax.all._
 import cats.effect.{ContextShift, Effect, IO}
 import cats.implicits._
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.StreamSupervisor.{FetchLatestState, LatestState, Stop}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -21,9 +20,8 @@ import scala.reflect.ClassTag
   *
   * @param actor the underlying actor
   */
-class StreamSupervisor[F[_], A](val actor: ActorRef)(implicit F: Effect[F], as: ActorSystem, config: SourcingConfig) {
+class StreamSupervisor[F[_], A](val actor: ActorRef)(implicit F: Effect[F], as: ActorSystem, askTimeout: Timeout) {
   private implicit val ec: ExecutionContext           = as.dispatcher
-  private implicit val askTimeout: Timeout            = config.askTimeout
   private implicit val contextShift: ContextShift[IO] = IO.contextShift(ec)
 
   /**
@@ -164,7 +162,7 @@ object StreamSupervisor {
       name: String
   )(
       implicit as: ActorSystem,
-      config: SourcingConfig
+      askTimeout: Timeout
   ): StreamSupervisor[F, A] =
     start(sourceF, name, as.actorOf)
 
@@ -181,7 +179,7 @@ object StreamSupervisor {
       actorOf: (Props, String) => ActorRef
   )(
       implicit as: ActorSystem,
-      config: SourcingConfig
+      askTimeout: Timeout
   ): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](actorOf(props(sourceF), name))
 
@@ -196,7 +194,7 @@ object StreamSupervisor {
       name: String
   )(
       implicit as: ActorSystem,
-      config: SourcingConfig
+      askTimeout: Timeout
   ): StreamSupervisor[F, A] =
     start(sourceF, name, as.actorOf)
 
@@ -213,7 +211,7 @@ object StreamSupervisor {
       actorOf: (Props, String) => ActorRef
   )(
       implicit as: ActorSystem,
-      config: SourcingConfig
+      askTimeout: Timeout
   ): StreamSupervisor[F, A] =
     new StreamSupervisor[F, A](actorOf(singletonProps(sourceF), name))
 }

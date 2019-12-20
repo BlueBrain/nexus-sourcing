@@ -1,17 +1,17 @@
-package ch.epfl.bluebrain.nexus.sourcing.akka
+package ch.epfl.bluebrain.nexus.sourcing.akka.aggregate
 
 import akka.actor.ActorSystem
 import akka.util.Timeout
-import cats.Applicative
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig._
-import retry.RetryPolicies._
-import retry.RetryPolicy
+import ch.epfl.bluebrain.nexus.sourcing.RetryStrategyConfig
+import ch.epfl.bluebrain.nexus.sourcing.akka.StopStrategy
+import ch.epfl.bluebrain.nexus.sourcing.akka.StopStrategy.neverDuration
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateConfig.{AkkaAggregateConfig, PassivationStrategyConfig}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 /**
-  * Sourcing configuration.
+  * Aggregate configuration.
   *
   * @param askTimeout                        timeout for the message exchange with the aggregate actor
   * @param queryJournalPlugin                the query (read) plugin journal id
@@ -21,7 +21,7 @@ import scala.concurrent.duration.FiniteDuration
   * @param passivation                       the passivation strategy configuration
   * @param retry                             the retry strategy configuration
   */
-final case class SourcingConfig(
+final case class AggregateConfig(
     askTimeout: FiniteDuration,
     queryJournalPlugin: String,
     commandEvaluationTimeout: FiniteDuration,
@@ -32,12 +32,12 @@ final case class SourcingConfig(
 ) {
 
   /**
-    * Computes an [[AkkaSourcingConfig]] using an implicitly available actor system.
+    * Computes an [[AkkaAggregateConfig]] using an implicitly available actor system.
     *
     * @param as the underlying actor system
     */
-  def akkaSourcingConfig(implicit as: ActorSystem): AkkaSourcingConfig =
-    AkkaSourcingConfig(
+  def akkaAggregateConfig(implicit as: ActorSystem): AkkaAggregateConfig =
+    AkkaAggregateConfig(
       askTimeout = Timeout(askTimeout),
       readJournalPluginId = queryJournalPlugin,
       commandEvaluationMaxDuration = commandEvaluationTimeout,
@@ -49,22 +49,21 @@ final case class SourcingConfig(
   /**
     * Computes a passivation strategy from the provided configuration and the passivation evaluation function.
     *
-    * @param shouldPassivate whether aggregate should passivate after a message exchange
+    * @param updatePassivationTimer if provided, the function will be evaluated after each message exchanged; its result will
+    *                                determine if the passivation interval should be updated or not
     * @tparam State   the type of the aggregate state
     * @tparam Command the type of the aggregate command
     */
   def passivationStrategy[State, Command](
-      shouldPassivate: (String, String, State, Option[Command]) => Boolean =
-        (_: String, _: String, _: State, _: Option[Command]) => false
+      updatePassivationTimer: (String, String, State, Option[Command]) => Option[FiniteDuration] = neverDuration _
   ): PassivationStrategy[State, Command] =
     PassivationStrategy(
-      passivation.lapsedSinceLastInteraction,
-      passivation.lapsedSinceRecoveryCompleted,
-      shouldPassivate
+      StopStrategy(passivation.lapsedSinceLastInteraction, updatePassivationTimer),
+      passivation.lapsedSinceRecoveryCompleted
     )
 }
 
-object SourcingConfig {
+object AggregateConfig {
 
   /**
     * Partial configuration for aggregate passivation strategy.
@@ -80,37 +79,18 @@ object SourcingConfig {
   )
 
   /**
-    * Retry strategy configuration.
+    * Configuration for the akka aggregate implementation.
     *
-    * @param strategy     the type of strategy; possible options are "never", "once", "constant" and "exponential"
-    * @param initialDelay the initial delay before retrying that will be multiplied with the 'factor' for each attempt
-    *                     (applicable only for strategy "exponential")
-    * @param maxDelay     the maximum delay (applicable for strategy "exponential")
-    * @param maxRetries   maximum number of retries in case of failure (applicable for strategy "exponential" and "constant")
-    * @param constant    the constant delay (applicable only for strategy "constant")
+    * @param askTimeout                        maximum duration to wait for a reply when communicating with an aggregate actor
+    * @param readJournalPluginId               the id of the read journal for querying across entity event logs
+    * @param commandEvaluationMaxDuration      the maximum amount of time allowed for a command to evaluate before cancelled
+    * @param commandEvaluationExecutionContext the execution context where command evaluation is executed
     */
-  final case class RetryStrategyConfig(
-      strategy: String,
-      initialDelay: FiniteDuration,
-      maxDelay: FiniteDuration,
-      maxRetries: Int,
-      constant: FiniteDuration
-  ) {
-
-    /**
-      * Computes a retry policy from the provided configuration.
-      */
-    def retryPolicy[F[_]: Applicative]: RetryPolicy[F] =
-      strategy match {
-        case "exponential" =>
-          capDelay[F](maxDelay, fullJitter[F](initialDelay)) join limitRetries[F](maxRetries)
-        case "constant" =>
-          constantDelay[F](constant) join limitRetries[F](maxRetries)
-        case "once" =>
-          constantDelay[F](initialDelay) join limitRetries[F](1)
-        case _ =>
-          alwaysGiveUp
-      }
-  }
+  final case class AkkaAggregateConfig(
+      askTimeout: Timeout,
+      readJournalPluginId: String,
+      commandEvaluationMaxDuration: FiniteDuration,
+      commandEvaluationExecutionContext: ExecutionContext
+  )
 
 }

@@ -7,9 +7,9 @@ sealed trait Command extends Product with Serializable {
 }
 
 object Command {
-  final case class Increment(rev: Int, step: Int)                             extends Command
-  final case class IncrementAsync(rev: Int, step: Int, sleep: FiniteDuration) extends Command
-  final case class Initialize(rev: Int)                                       extends Command
-  final case class Boom(rev: Int, message: String)                            extends Command
-  final case class Never(rev: Int)                                            extends Command
+  case class Increment(rev: Int, step: Int)                             extends Command
+  case class IncrementAsync(rev: Int, step: Int, sleep: FiniteDuration) extends Command
+  case class Initialize(rev: Int)                                       extends Command
+  case class Boom(rev: Int, message: String)                            extends Command
+  case class Never(rev: Int)                                            extends Command
 }

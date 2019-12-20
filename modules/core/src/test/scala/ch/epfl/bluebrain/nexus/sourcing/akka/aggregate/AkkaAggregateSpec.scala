@@ -1,4 +1,4 @@
-package ch.epfl.bluebrain.nexus.sourcing.akka
+package ch.epfl.bluebrain.nexus.sourcing.akka.aggregate
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -14,7 +14,7 @@ import ch.epfl.bluebrain.nexus.sourcing.Event._
 import ch.epfl.bluebrain.nexus.sourcing.State.Current
 import ch.epfl.bluebrain.nexus.sourcing._
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateConfig.AkkaAggregateConfig
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.concurrent.ScalaFutures
 
@@ -35,7 +35,7 @@ class AkkaAggregateSpec
   implicit val ec: ExecutionContext  = system.dispatcher
   implicit val timer: Timer[IO]      = IO.timer(ec)
 
-  val config = AkkaSourcingConfig(
+  val config = AkkaAggregateConfig(
     Timeout(1.second.dilated),
     "inmemory-read-journal",
     200.milliseconds,
@@ -46,7 +46,7 @@ class AkkaAggregateSpec
 
   "A sharded AkkaAggregate" when {
 
-    "configured with immediate passivation an no retries" should {
+    "configured with immediate passivation and no retries" should {
       val passivation    = PassivationStrategy.immediately[State, Command]
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "immediate-passivation-no-retries"
@@ -59,7 +59,7 @@ class AkkaAggregateSpec
       runTests(agg, name, first, second)
     }
 
-    "configured with no passivation an no retries" should {
+    "configured with no passivation and no retries" should {
       val passivation    = PassivationStrategy.never[State, Command]
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "no-passivation-no-retries"
@@ -72,7 +72,7 @@ class AkkaAggregateSpec
       runTests(agg, name, first, second)
     }
 
-    "configured with fixed passivation an no retries" should {
+    "configured with fixed passivation and no retries" should {
       val passivation    = PassivationStrategy.lapsedSinceRecoveryCompleted[State, Command](10.milliseconds.dilated)
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "fixed-passivation-no-retries"
@@ -85,7 +85,7 @@ class AkkaAggregateSpec
       runTests(agg, name, first, second)
     }
 
-    "configured with interaction passivation an no retries" should {
+    "configured with interaction passivation and no retries" should {
       val passivation    = PassivationStrategy.lapsedSinceLastInteraction[State, Command](10.milliseconds.dilated)
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "interaction-passivation-no-retries"
@@ -165,7 +165,7 @@ class AkkaAggregateSpec
 
   "A tree AkkaAggregate" when {
 
-    "configured with immediate passivation an no retries" should {
+    "configured with immediate passivation and no retries" should {
       val passivation    = PassivationStrategy.immediately[State, Command]
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "immediate-passivation-no-retries"
@@ -178,7 +178,7 @@ class AkkaAggregateSpec
       runTests(agg, name, first, second)
     }
 
-    "configured with no passivation an no retries" should {
+    "configured with no passivation and no retries" should {
       val passivation    = PassivationStrategy.never[State, Command]
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "no-passivation-no-retries"
@@ -191,7 +191,7 @@ class AkkaAggregateSpec
       runTests(agg, name, first, second)
     }
 
-    "configured with fixed passivation an no retries" should {
+    "configured with fixed passivation and no retries" should {
       val passivation    = PassivationStrategy.lapsedSinceRecoveryCompleted[State, Command](10.milliseconds.dilated)
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "fixed-passivation-no-retries"
@@ -204,7 +204,7 @@ class AkkaAggregateSpec
       runTests(agg, name, first, second)
     }
 
-    "configured with interaction passivation an no retries" should {
+    "configured with interaction passivation and no retries" should {
       val passivation    = PassivationStrategy.lapsedSinceLastInteraction[State, Command](10.milliseconds.dilated)
       implicit val retry = neverStrategy.retryPolicy[IO]
       val name           = "interaction-passivation-no-retries"

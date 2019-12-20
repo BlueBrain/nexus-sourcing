@@ -1,6 +1,6 @@
 package ch.epfl.bluebrain.nexus.sourcing.projections
 
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.RetryStrategyConfig
+import ch.epfl.bluebrain.nexus.sourcing.RetryStrategyConfig
 import ch.epfl.bluebrain.nexus.sourcing.projections.IndexingConfig.PersistProgressConfig
 
 import scala.concurrent.duration.FiniteDuration

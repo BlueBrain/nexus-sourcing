@@ -1,11 +1,12 @@
-package ch.epfl.bluebrain.nexus.sourcing.akka
+package ch.epfl.bluebrain.nexus.sourcing.akka.aggregate
 
 import java.io.File
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import ch.epfl.bluebrain.nexus.sourcing.SourcingSpec
-import ch.epfl.bluebrain.nexus.sourcing.akka.SourcingConfig.{PassivationStrategyConfig, RetryStrategyConfig}
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateConfig.{AkkaAggregateConfig, PassivationStrategyConfig}
+import ch.epfl.bluebrain.nexus.sourcing.{RetryStrategyConfig, SourcingSpec}
 import com.typesafe.config.ConfigFactory
 import pureconfig.generic.auto._
 import pureconfig.ConfigSource
@@ -13,9 +14,9 @@ import pureconfig.ConfigSource
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-class SourcingConfigSpec extends TestKit(ActorSystem("SourcingConfigSpec")) with SourcingSpec {
+class AggregateConfigSpec extends TestKit(ActorSystem("SourcingConfigSpec")) with SourcingSpec {
 
-  val config = SourcingConfig(
+  val config = aggregate.AggregateConfig(
     10.seconds,
     "inmemory-journal",
     5.seconds,
@@ -28,12 +29,12 @@ class SourcingConfigSpec extends TestKit(ActorSystem("SourcingConfigSpec")) with
   "SourcingConfig" should {
 
     "read from config file" in {
-      val readConfig = ConfigFactory.parseFile(new File(getClass.getResource("/example-sourcing.conf").toURI))
-      ConfigSource.fromConfig(readConfig).at("sourcing").loadOrThrow[SourcingConfig] shouldEqual config
+      val readConfig = ConfigFactory.parseFile(new File(getClass.getResource("/example-aggregate.conf").toURI))
+      ConfigSource.fromConfig(readConfig).at("aggregate").loadOrThrow[AggregateConfig] shouldEqual config
     }
 
     "return AkkaSourcingConfig" in {
-      config.akkaSourcingConfig shouldEqual AkkaSourcingConfig(
+      config.akkaAggregateConfig shouldEqual AkkaAggregateConfig(
         10.second,
         "inmemory-journal",
         5.seconds,

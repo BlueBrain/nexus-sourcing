@@ -1,4 +1,5 @@
-package ch.epfl.bluebrain.nexus.sourcing.akka
+package ch.epfl.bluebrain.nexus.sourcing.akka.aggregate
+
 import java.net.{URLDecoder, URLEncoder}
 import java.util.concurrent.TimeoutException
 
@@ -9,8 +10,11 @@ import cats.effect.syntax.all._
 import cats.effect.{ContextShift, Effect, IO, Timer}
 import cats.implicits._
 import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateConfig.AkkaAggregateConfig
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateMsg._
 
 import scala.collection.mutable
+import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 
@@ -34,7 +38,7 @@ import scala.util.control.NonFatal
   * @tparam Rejection          the command evaluation rejection type of the aggregate
   */
 //noinspection ActorMutableStateInspection
-private[akka] abstract class AggregateActor[
+private[aggregate] abstract class AggregateActor[
     F[_]: Effect,
     Event: ClassTag,
     State: ClassTag,
@@ -46,23 +50,26 @@ private[akka] abstract class AggregateActor[
     next: (State, Event) => State,
     evaluate: (State, Command) => F[Either[Rejection, Event]],
     passivationStrategy: PassivationStrategy[State, Command],
-    config: AkkaSourcingConfig
+    config: AkkaAggregateConfig
 ) extends PersistentActor
     with Stash
     with ActorLogging {
 
   def id: String
 
-  def passivate(): Unit
+  def sendPassivationMsg(): Unit
 
   override val persistenceId: String = s"$name-${URLEncoder.encode(id, "UTF-8")}"
 
-  private val Event     = implicitly[ClassTag[Event]]
-  private val State     = implicitly[ClassTag[State]]
-  private val Command   = implicitly[ClassTag[Command]]
-  private val Rejection = implicitly[ClassTag[Rejection]]
+  private val Event                       = implicitly[ClassTag[Event]]
+  private val State                       = implicitly[ClassTag[State]]
+  private val Command                     = implicitly[ClassTag[Command]]
+  private val Rejection                   = implicitly[ClassTag[Rejection]]
+  private val immediately: FiniteDuration = 0.millis
 
   private var state = initialState
+  //noinspection ActorMutableStateInspection
+  private var passivateRequested: Boolean = false
 
   private implicit val timer: Timer[IO]     = IO.timer(config.commandEvaluationExecutionContext)
   private implicit val cs: ContextShift[IO] = IO.contextShift(config.commandEvaluationExecutionContext)
@@ -83,7 +90,7 @@ private[akka] abstract class AggregateActor[
   override def receiveRecover: Receive = {
     case RecoveryCompleted =>
       passivationStrategy.lapsedSinceRecoveryCompleted.foreach { duration =>
-        context.system.scheduler.scheduleOnce(duration)(passivate())(context.dispatcher)
+        context.system.scheduler.scheduleOnce(duration)(passivate(Some(immediately)))(context.dispatcher)
         log.debug("Configured actor with id '{}' to passivate after '{}' seconds", persistenceId, duration.toSeconds)
       }
       log.debug("Recovery completed on actor '{}'", persistenceId)
@@ -112,7 +119,7 @@ private[akka] abstract class AggregateActor[
             state = next(state, event)
             log.debug("Applied event '{}' to actor '{}'", event, persistenceId)
             sender() ! Appended(id, lastSequenceNr)
-            passivateAfterEvaluation()
+            updatePassivation()
           }
         // $COVERAGE-OFF$
         case _ =>
@@ -122,17 +129,17 @@ private[akka] abstract class AggregateActor[
             Event.runtimeClass.getSimpleName
           )
           sender() ! TypeError(id, Event.runtimeClass.getSimpleName, value)
-          passivateAfterEvaluation()
+          updatePassivation()
         // $COVERAGE-ON$
       }
     case GetLastSeqNr(mid) if mid == id =>
       sender() ! LastSeqNr(id, lastSequenceNr)
       log.debug("Replied with LastSeqNr '{}' from actor '{}'", lastSequenceNr, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case GetCurrentState(mid) if mid == id =>
       sender() ! CurrentState(id, state)
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case Evaluate(mid, value) if mid == id =>
       value match {
         case Command(cmd) =>
@@ -147,7 +154,7 @@ private[akka] abstract class AggregateActor[
             Command.runtimeClass.getSimpleName
           )
           sender() ! TypeError(id, Command.runtimeClass.getSimpleName, value)
-          passivateAfterEvaluation()
+          updatePassivation()
         // $COVERAGE-ON$
       }
 
@@ -165,7 +172,7 @@ private[akka] abstract class AggregateActor[
             Command.runtimeClass.getSimpleName
           )
           sender() ! TypeError(id, Command.runtimeClass.getSimpleName, value)
-          passivateAfterEvaluation()
+          updatePassivation()
         // $COVERAGE-ON$
       }
     case Snapshot(mid) if mid == id =>
@@ -174,10 +181,10 @@ private[akka] abstract class AggregateActor[
       context.become(snapshotting(sender()))
 
     // $COVERAGE-OFF$
-    case msg: Msg if msg.id != id =>
+    case msg: AggregateMsg if msg.id != id =>
       log.warning("Unexpected message id '{}' received in actor with id '{}'", msg.id, persistenceId)
       sender() ! UnexpectedMsgId(id, msg.id)
-      passivateAfterEvaluation()
+      updatePassivation()
     // $COVERAGE-ON$
   }
 
@@ -185,17 +192,17 @@ private[akka] abstract class AggregateActor[
     case GetLastSeqNr(mid) if mid == id =>
       sender() ! LastSeqNr(id, lastSequenceNr)
       log.debug("Replied with LastSeqNr '{}' from actor '{}'", lastSequenceNr, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case GetCurrentState(mid) if mid == id =>
       sender() ! CurrentState(id, state)
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case Left(Rejection(rejection)) =>
       previous ! Evaluated[Rejection, State, Event](id, Left(rejection))
       log.debug("Rejected command '{}' on actor '{}' because '{}'", cmd, persistenceId, rejection)
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation(Some(cmd))
+      updatePassivation(Some(cmd))
     case Right(Event(event)) =>
       persist(event) { _ =>
         state = next(state, event)
@@ -203,25 +210,25 @@ private[akka] abstract class AggregateActor[
         log.debug("Applied event '{}' to actor '{}'", event, persistenceId)
         context.become(receiveCommand)
         unstashAll()
-        passivateAfterEvaluation(Some(cmd))
+        updatePassivation(Some(cmd))
       }
     case cet: CommandEvaluationTimeout[_] =>
       log.debug("Returning the command evaluation timeout on actor '{}' to the sender", persistenceId)
       previous ! cet
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation(Some(cmd))
+      updatePassivation(Some(cmd))
     case cee: CommandEvaluationError[_] =>
       log.debug("Returning the command evaluation error on actor '{}' to the sender", persistenceId)
       previous ! cee
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation(Some(cmd))
+      updatePassivation(Some(cmd))
     // $COVERAGE-OFF$
-    case msg: Msg if msg.id != id =>
+    case msg: AggregateMsg if msg.id != id =>
       log.warning("Unexpected message id '{}' received in actor with id '{}'", msg.id, persistenceId)
       sender() ! UnexpectedMsgId(id, msg.id)
-      passivateAfterEvaluation()
+      updatePassivation()
     // $COVERAGE-ON$
     case other =>
       log.debug("New message '{}' received for '{}' while evaluating a command, stashing", other, persistenceId)
@@ -232,40 +239,40 @@ private[akka] abstract class AggregateActor[
     case GetLastSeqNr(mid) if mid == id =>
       sender() ! LastSeqNr(id, lastSequenceNr)
       log.debug("Replied with LastSeqNr '{}' from actor '{}'", lastSequenceNr, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case GetCurrentState(mid) if mid == id =>
       sender() ! CurrentState(id, state)
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case Left(Rejection(rejection)) =>
       previous ! Tested[Rejection, State, Event](id, Left(rejection))
       log.debug("Rejected test command '{}' on actor '{}' because '{}'", cmd, persistenceId, rejection)
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation()
+      updatePassivation()
     case Right(Event(event)) =>
       previous ! Tested[Rejection, State, Event](id, Right((next(state, event), event)))
       log.debug("Accepted test command '{}' on actor '{}' producing '{}'", cmd, persistenceId, event)
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation()
+      updatePassivation()
     case cet: CommandEvaluationTimeout[_] =>
       log.debug("Returning the command testing timeout on actor '{}' to the sender", persistenceId)
       previous ! cet
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation(Some(cmd))
+      updatePassivation(Some(cmd))
     case cee: CommandEvaluationError[_] =>
       log.debug("Returning the command testing error on actor '{}' to the sender", persistenceId)
       previous ! cee
       context.become(receiveCommand)
       unstashAll()
-      passivateAfterEvaluation(Some(cmd))
-    case msg: Msg if msg.id != id =>
+      updatePassivation(Some(cmd))
+    case msg: AggregateMsg if msg.id != id =>
       // $COVERAGE-OFF$
       log.warning("Unexpected message id '{}' received in actor with id '{}'", msg.id, persistenceId)
       sender() ! UnexpectedMsgId(id, msg.id)
-      passivateAfterEvaluation()
+      updatePassivation()
     // $COVERAGE-ON$
     case other =>
       log.debug("New message '{}' received for '{}' while testing a command, stashing", other, persistenceId)
@@ -282,20 +289,20 @@ private[akka] abstract class AggregateActor[
     case GetLastSeqNr(mid) if mid == id =>
       sender() ! LastSeqNr(id, lastSequenceNr)
       log.debug("Replied with LastSeqNr '{}' from actor '{}'", lastSequenceNr, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case GetCurrentState(mid) if mid == id =>
       sender() ! CurrentState(id, state)
       log.debug("Replied with CurrentState '{}' from actor '{}'", state, persistenceId)
-      passivateAfterEvaluation()
+      updatePassivation()
     case SaveSnapshotFailure(metadata, cause) =>
       previous ! SnapshotFailed(id)
       log.error(cause, "Failed to save snapshot on '{}', seq nr '{}'", persistenceId, metadata.sequenceNr)
       context.become(receiveCommand)
       unstashAll()
-    case msg: Msg if msg.id != id =>
+    case msg: AggregateMsg if msg.id != id =>
       log.warning("Unexpected message id '{}' received in actor with id '{}'", msg.id, persistenceId)
       sender() ! UnexpectedMsgId(id, msg.id)
-      passivateAfterEvaluation()
+      updatePassivation()
     case other =>
       log.debug("New message '{}' received for '{}' while creating a snapshot, stashing", other, persistenceId)
       stash()
@@ -304,20 +311,14 @@ private[akka] abstract class AggregateActor[
 
   // $COVERAGE-OFF$
   override def unhandled(message: Any): Unit = message match {
-    case ReceiveTimeout => passivate()
+    case ReceiveTimeout => passivate(Some(immediately))
     case Done(_)        => context.stop(self)
     case other =>
       log.error("Received unknown message '{}' for actor with id '{}'", other, persistenceId)
       super.unhandled(other)
-      passivateAfterEvaluation()
+      updatePassivation()
   }
   // $COVERAGE-ON$
-
-  private def passivateAfterEvaluation(cmd: Option[Command] = None): Unit =
-    if (passivationStrategy.afterEvaluation(name, id, state, cmd)) {
-      log.debug("Passivating actor with id '{}' as a result of the per evaluation passivation strategy", persistenceId)
-      passivate()
-    }
 
   private def evaluateCommand(cmd: Command, test: Boolean = false): Unit = {
     val scope = if (test) "testing" else "evaluating"
@@ -337,14 +338,38 @@ private[akka] abstract class AggregateActor[
     }
     io.unsafeRunAsyncAndForget()
   }
+
+  private def updatePassivation(cmd: Option[Command] = None): Unit =
+    passivate(passivationStrategy.lapsedAfterEvaluation(name, id, state, cmd))
+
+  private def passivate(intervalOpt: Option[FiniteDuration]): Unit =
+    intervalOpt.foreach { interval =>
+      if (interval < 1.millis) {
+        if (!passivateRequested) {
+          sendPassivationMsg()
+          log.debug("Passivate actor with name '{}' and id '{}' immediately", name, id)
+          passivateRequested = true
+        }
+      } else {
+        context.setReceiveTimeout(interval)
+        log.debug(
+          "Scheduled passivation for actor with name '{}' and id '{}' after inactivity '{}'",
+          name,
+          id,
+          interval
+        )
+      }
+    }
 }
 
-private[akka] final case class Terminated(id: String, ref: ActorRef)
+private[aggregate] final case class Terminated(id: String, ref: ActorRef)
 
 //noinspection ActorMutableStateInspection
-private[akka] class ParentAggregateActor(name: String, childProps: String => Props) extends Actor with ActorLogging {
+private[aggregate] class ParentAggregateActor(name: String, childProps: String => Props)
+    extends Actor
+    with ActorLogging {
 
-  private val buffer = mutable.Map.empty[String, Vector[(ActorRef, Msg)]]
+  private val buffer = mutable.Map.empty[String, Vector[(ActorRef, AggregateMsg)]]
 
   def receive: Receive = {
     case Done(id) if !buffer.contains(id) =>
@@ -352,11 +377,11 @@ private[akka] class ParentAggregateActor(name: String, childProps: String => Pro
       context.watchWith(child, Terminated(id, child))
       buffer.put(id, Vector.empty)
       child ! Done(id)
-    case msg: Msg if buffer.contains(msg.id) =>
+    case msg: AggregateMsg if buffer.contains(msg.id) =>
       // must buffer messages
       val messages = buffer(msg.id) :+ (sender() -> msg)
       val _        = buffer.put(msg.id, messages)
-    case msg: Msg =>
+    case msg: AggregateMsg =>
       val childName = s"$name-${msg.id}"
       log.debug("Routing message '{}' to child '{}'", msg, childName)
       child(msg.id).forward(msg)
@@ -379,7 +404,7 @@ private[akka] class ParentAggregateActor(name: String, childProps: String => Pro
   }
 }
 
-private[akka] class ChildAggregateActor[
+private[aggregate] class ChildAggregateActor[
     F[_]: Effect,
     Event: ClassTag,
     State: ClassTag,
@@ -392,7 +417,7 @@ private[akka] class ChildAggregateActor[
     next: (State, Event) => State,
     evaluate: (State, Command) => F[Either[Rejection, Event]],
     passivationStrategy: PassivationStrategy[State, Command],
-    config: AkkaSourcingConfig
+    config: AkkaAggregateConfig
 ) extends AggregateActor[
       F,
       Event,
@@ -401,19 +426,10 @@ private[akka] class ChildAggregateActor[
       Rejection
     ](name, initialState, next, evaluate, passivationStrategy, config) {
 
-  //noinspection ActorMutableStateInspection
-  private var passivateRequested: Boolean = false
-
-  override def passivate(): Unit = {
-    if (!passivateRequested) {
-      context.parent ! Done(id)
-      log.debug("Scheduled passivation for actor with name '{}' and id '{}'", name, id)
-      passivateRequested = true
-    }
-  }
+  override def sendPassivationMsg(): Unit = context.parent ! Done(id)
 }
 
-private[akka] class ShardedAggregateActor[
+private[aggregate] class ShardedAggregateActor[
     F[_]: Effect,
     Event: ClassTag,
     State: ClassTag,
@@ -425,7 +441,7 @@ private[akka] class ShardedAggregateActor[
     next: (State, Event) => State,
     evaluate: (State, Command) => F[Either[Rejection, Event]],
     passivationStrategy: PassivationStrategy[State, Command],
-    config: AkkaSourcingConfig
+    config: AkkaAggregateConfig
 ) extends AggregateActor[
       F,
       Event,
@@ -436,22 +452,14 @@ private[akka] class ShardedAggregateActor[
 
   override def id: String = URLDecoder.decode(self.path.name, "UTF-8")
 
-  //noinspection ActorMutableStateInspection
-  private var passivateRequested: Boolean = false
+  override def sendPassivationMsg(): Unit = context.parent ! Passivate(stopMessage = Done(id))
 
-  override def passivate(): Unit = {
-    if (!passivateRequested) {
-      context.parent ! Passivate(stopMessage = Done(id))
-      log.debug("Scheduled passivation for actor with name '{}' and id '{}'", name, id)
-      passivateRequested = true
-    }
-  }
 }
 
 object AggregateActor {
 
   @SuppressWarnings(Array("MaxParameters"))
-  private[akka] def parentProps[
+  private[aggregate] def parentProps[
       F[_]: Effect,
       Event: ClassTag,
       State: ClassTag,
@@ -463,12 +471,12 @@ object AggregateActor {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig
+      config: AkkaAggregateConfig
   ): Props =
     Props(new ParentAggregateActor(name, childProps(name, initialState, next, evaluate, passivationStrategy, config)))
 
   @SuppressWarnings(Array("MaxParameters"))
-  private[akka] def childProps[
+  private[aggregate] def childProps[
       F[_]: Effect,
       Event: ClassTag,
       State: ClassTag,
@@ -480,12 +488,12 @@ object AggregateActor {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig
+      config: AkkaAggregateConfig
   )(id: String): Props =
     Props(new ChildAggregateActor(id, name, initialState, next, evaluate, passivationStrategy, config))
 
   @SuppressWarnings(Array("MaxParameters"))
-  private[akka] def shardedProps[
+  private[aggregate] def shardedProps[
       F[_]: Effect,
       Event: ClassTag,
       State: ClassTag,
@@ -497,7 +505,7 @@ object AggregateActor {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig
+      config: AkkaAggregateConfig
   ): Props =
     Props(new ShardedAggregateActor(name, initialState, next, evaluate, passivationStrategy, config))
 }

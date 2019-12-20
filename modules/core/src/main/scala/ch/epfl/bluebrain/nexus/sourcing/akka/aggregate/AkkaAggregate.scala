@@ -1,19 +1,18 @@
-package ch.epfl.bluebrain.nexus.sourcing.akka
+package ch.epfl.bluebrain.nexus.sourcing.akka.aggregate
 
 import java.net.URLEncoder
 
 import akka.actor.ActorSystem
 import akka.cluster.sharding.ShardRegion.{ExtractEntityId, ExtractShardId}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
-import akka.pattern.ask
 import akka.persistence.query.scaladsl.CurrentEventsByPersistenceIdQuery
 import akka.persistence.query.{EventEnvelope, PersistenceQuery}
 import akka.routing.ConsistentHashingPool
-import akka.util.Timeout
-import cats.effect.{ContextShift, Effect, IO, Timer}
-import cats.syntax.all._
+import cats.effect.{Effect, IO, Timer}
 import ch.epfl.bluebrain.nexus.sourcing.Aggregate
-import ch.epfl.bluebrain.nexus.sourcing.akka.Msg._
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateConfig.AkkaAggregateConfig
+import ch.epfl.bluebrain.nexus.sourcing.akka.aggregate.AggregateMsg._
+import ch.epfl.bluebrain.nexus.sourcing.akka.{ActorRefSelection, AkkaActorIntermediator}
 import retry.CatsEffect._
 import retry._
 import retry.syntax.all._
@@ -35,16 +34,13 @@ import scala.reflect.ClassTag
   * @tparam Command   the command type
   * @tparam Rejection the rejection type
   */
-class AkkaAggregate[F[_]: Timer, Event: ClassTag, State, Command, Rejection] private[akka] (
+class AkkaAggregate[F[_]: Timer, Event: ClassTag, State, Command, Rejection] private[aggregate] (
     override val name: String,
     selection: ActorRefSelection[F],
-    config: AkkaSourcingConfig
+    config: AkkaAggregateConfig
 )(implicit F: Effect[F], as: ActorSystem, policy: RetryPolicy[F])
-    extends Aggregate[F, String, Event, State, Command, Rejection] {
-
-  private implicit val timeout: Timeout                      = config.askTimeout
-  private implicit val contextShift: ContextShift[IO]        = IO.contextShift(as.dispatcher)
-  private implicit def noop[A]: (A, RetryDetails) => F[Unit] = retry.noop[F, A]
+    extends AkkaActorIntermediator(name, selection, config.askTimeout)
+    with Aggregate[F, String, Event, State, Command, Rejection] {
 
   private val Event = implicitly[ClassTag[Event]]
   private val pq    = PersistenceQuery(as).readJournalFor[CurrentEventsByPersistenceIdQuery](config.readJournalPluginId)
@@ -66,21 +62,6 @@ class AkkaAggregate[F[_]: Timer, Event: ClassTag, State, Command, Rejection] pri
 
   override def append(id: String, event: Event): F[Long] =
     send(id, Append(id, event), (r: Appended) => r.lastSeqNr)
-
-  private def send[Reply, A](id: String, msg: Msg, f: Reply => A)(implicit Reply: ClassTag[Reply]): F[A] =
-    selection(name, id).flatMap { ref =>
-      val future = IO(ref ? msg)
-      val fa     = IO.fromFuture(future).to[F]
-      fa.flatMap[A] {
-          case Reply(value)                     => F.pure(f(value))
-          case te: TypeError                    => F.raiseError(te)
-          case um: UnexpectedMsgId              => F.raiseError(um)
-          case cet: CommandEvaluationTimeout[_] => F.raiseError(cet)
-          case cee: CommandEvaluationError[_]   => F.raiseError(cee)
-          case other                            => F.raiseError(TypeError(id, Reply.runtimeClass.getSimpleName, other))
-        }
-        .retryingOnAllErrors[Throwable]
-    }
 
   override def foldLeft[B](id: String, z: B)(f: (B, Event) => B): F[B] = {
     val future = pq
@@ -124,7 +105,7 @@ final class AggregateTree[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig,
+      config: AkkaAggregateConfig,
       poolSize: Int
   )(
       implicit
@@ -166,7 +147,7 @@ final class AggregateSharded[F[_]] {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig,
+      config: AkkaAggregateConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
   )(
@@ -228,7 +209,7 @@ object AkkaAggregate {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig,
+      config: AkkaAggregateConfig,
       poolSize: Int
   )(implicit as: ActorSystem, policy: RetryPolicy[F]): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val F = implicitly[Effect[F]]
@@ -280,16 +261,16 @@ object AkkaAggregate {
       next: (State, Event) => State,
       evaluate: (State, Command) => F[Either[Rejection, Event]],
       passivationStrategy: PassivationStrategy[State, Command],
-      config: AkkaSourcingConfig,
+      config: AkkaAggregateConfig,
       shards: Int,
       shardingSettings: Option[ClusterShardingSettings] = None
   )(implicit as: ActorSystem, policy: RetryPolicy[F]): F[Aggregate[F, String, Event, State, Command, Rejection]] = {
     val settings = shardingSettings.getOrElse(ClusterShardingSettings(as))
     val shardExtractor: ExtractShardId = {
-      case msg: Msg => math.abs(msg.id.hashCode) % shards toString
+      case msg: AggregateMsg => math.abs(msg.id.hashCode) % shards toString
     }
     val entityExtractor: ExtractEntityId = {
-      case msg: Msg => (msg.id, msg)
+      case msg: AggregateMsg => (msg.id, msg)
     }
     val F = implicitly[Effect[F]]
     F.delay {

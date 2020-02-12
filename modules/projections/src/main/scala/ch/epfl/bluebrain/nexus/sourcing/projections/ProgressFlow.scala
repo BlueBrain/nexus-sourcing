@@ -196,27 +196,37 @@ object ProgressFlow {
       * It stores into the projections the progress at an interval rate provided by configuration.
       * It stores the failures into the projections.
       *
-      * @param id the projection id
-      * @param initial the initial projection progress
+      * @param id           the projection id
+      * @param initial      the initial projection progress
+      * @param mapProgress  the function to apply to the progress
       * @return a new [[Flow]] where the output is a [[ProjectionProgress]]
       */
-    def toPersistedProgress(id: String, initial: ProjectionProgress = NoProgress)(
+    def toPersistedProgress(
+        id: String,
+        initial: ProjectionProgress = NoProgress,
+        mapProgress: ProjectionProgress => Unit = _ => ()
+    )(
         implicit config: PersistProgressConfig,
         projections: Projections[F, String]
     ): Flow[I, ProjectionProgress, _] = {
 
-      val parallelFlow = Flow.fromGraph(GraphDSL.create() { implicit b =>
-        import GraphDSL.Implicits._
-        val persistFlow = Flow[ProjectionProgress]
-          .groupedWithin(config.persistAfterProcessed, config.maxTimeWindow)
-          .filter(_.nonEmpty)
-          .mapAsync(1)(p => (projections.recordProgress(id, p.last) >> F.pure(p)).toIO.unsafeToFuture())
+      val parallelFlow = Flow
+        .fromGraph(GraphDSL.create() { implicit b =>
+          import GraphDSL.Implicits._
+          val persistFlow = Flow[ProjectionProgress]
+            .groupedWithin(config.persistAfterProcessed, config.maxTimeWindow)
+            .filter(_.nonEmpty)
+            .mapAsync(1)(p => (projections.recordProgress(id, p.last) >> F.pure(p)).toIO.unsafeToFuture())
 
-        val broadcast = b.add(Broadcast[ProjectionProgress](2))
+          val broadcast = b.add(Broadcast[ProjectionProgress](2))
 
-        broadcast ~> persistFlow ~> Sink.ignore
-        FlowShape(broadcast.in, broadcast.out(1))
-      })
+          broadcast ~> persistFlow ~> Sink.ignore
+          FlowShape(broadcast.in, broadcast.out(1))
+        })
+        .map { p =>
+          val _ = mapProgress(p)
+          p
+        }
 
       persistErrors().toProgress(initial).via(parallelFlow)
 
@@ -225,11 +235,13 @@ object ProgressFlow {
     /**
       * Transform the underlying stream by computing the projection progress for the messages as they pass through this processing step.
       *
-      * @param initial the initial projection progress
+      * @param initial      the initial projection progress
+      * @param mapProgress  the function to apply to the progress
       * @return a new [[Flow]] where the output is a [[ProjectionProgress]]
       */
     def toProgress(
-        initial: ProjectionProgress = NoProgress
+        initial: ProjectionProgress = NoProgress,
+        mapProgress: ProjectionProgress => Unit = _ => ()
     ): Flow[I, ProjectionProgress, _] =
       flow
         .scan[ProjectionProgress](initial) { (acc, c) =>
@@ -238,6 +250,10 @@ object ProgressFlow {
             case (acc, (id, status)) if msg.offset.gt(initial.progress(id).offset) => acc + (id, msg.offset, status)
             case (acc, _)                                                          => acc
           }
+        }
+        .map { p =>
+          val _ = mapProgress(p)
+          p
         }
 
     /**

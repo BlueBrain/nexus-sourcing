@@ -8,6 +8,11 @@ A small eventsourcing scala library that models aggregates as FSMs.
 The `akka` modules provides an implementation based on `akka-persistence`, `akka-persistence-query` and
 `akka-cluster-sharding`.
 
+## Repository was discontinued
+
+The code has been moved to the [main nexus repository](https://github.com/bluebrain/nexus) as a module
+and its development will continue there.
+
 ### Example usage
 
 Considering the following `Event`, `State`, `Command` and `Rejection` types:
